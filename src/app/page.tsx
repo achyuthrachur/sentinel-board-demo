@@ -14,7 +14,8 @@ import {
   Brain,
   PauseCircle,
 } from 'lucide-react';
-import { WarpBackground } from '@/components/ui/warp-background';
+import { AnimatedGridPattern } from '@/components/ui/animated-grid-pattern';
+import { Particles } from '@/components/ui/particles';
 import { TextAnimate } from '@/components/ui/text-animate';
 import { NumberTicker } from '@/components/ui/number-ticker';
 import { ShimmerButton } from '@/components/ui/shimmer-button';
@@ -252,15 +253,32 @@ export default function LandingPage() {
     >
       {/* ── B1: Hero ── */}
       <section id="hero" className="relative min-h-screen">
-        <WarpBackground
-          className="absolute inset-0 rounded-none border-0 p-0"
-          beamsPerSide={4}
-          beamSize={8}
-          beamDuration={4}
-          gridColor="rgba(255,255,255,0.04)"
-        >
-          <div />
-        </WarpBackground>
+        {/* Subtle animated grid */}
+        <AnimatedGridPattern
+          className="absolute inset-0 h-full w-full opacity-[0.04] [mask-image:radial-gradient(ellipse_80%_70%_at_50%_40%,white,transparent)]"
+          numSquares={50}
+          maxOpacity={0.6}
+          duration={6}
+          width={40}
+          height={40}
+        />
+        {/* Floating amber particles — very low density */}
+        <Particles
+          className="absolute inset-0"
+          quantity={40}
+          ease={80}
+          color="#F5A800"
+          size={0.5}
+          staticity={70}
+        />
+        {/* Radial depth vignette */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,63,159,0.18) 0%, transparent 70%)',
+          }}
+        />
         <div className="relative z-10 flex min-h-screen flex-col items-center justify-center px-6 text-center">
           <CroweLogo size="lg" className="mb-8" />
 
@@ -316,8 +334,8 @@ export default function LandingPage() {
                 key={label}
                 className="flex flex-col items-center rounded-2xl border px-8 py-4"
                 style={{
-                  borderColor: 'var(--border-active)',
-                  backgroundColor: 'rgba(245,168,0,0.06)',
+                  borderColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
                 }}
               >
                 <div
@@ -685,8 +703,8 @@ export default function LandingPage() {
             squareSize={4}
             gridGap={6}
             color="#F5A800"
-            maxOpacity={0.08}
-            flickerChance={0.15}
+            maxOpacity={0.04}
+            flickerChance={0.08}
           />
         </div>
         <div className="relative z-10 flex flex-col items-center gap-6">
