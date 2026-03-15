@@ -1,0 +1,149 @@
+import type { RunnableConfig } from '@langchain/core/runnables';
+import OpenAI from 'openai';
+import { NODE_REGISTRY } from '@/data/nodeRegistry';
+import { emit } from '@/lib/eventEmitter';
+import type { BoardState } from '@/lib/graph/state';
+import type { TrendAnalysis, RAGStatus } from '@/types/state';
+import type { SSEEvent } from '@/types/events';
+import { POPULATION_BASELINE, QUARTERS } from '@/data/populationBaseline';
+import { TREND_NARRATIVE_PROMPT } from '@/lib/prompts/trendAnalyzerNarrative';
+
+const nodeMeta = NODE_REGISTRY.trend_analyzer;
+let openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openai) openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openai;
+}
+
+function getRunId(state: BoardState, config: RunnableConfig): string {
+  const configurable = config.configurable as { runId?: string } | undefined;
+  const withRunId = config as RunnableConfig & { runId?: string };
+  return configurable?.runId ?? withRunId.runId ?? state.scenarioId;
+}
+
+function linearSlope(values: readonly number[]): number {
+  const n = values.length;
+  const meanX = (n - 1) / 2;
+  const meanY = values.reduce((s, v) => s + v, 0) / n;
+  const num = values.reduce((s, v, i) => s + (i - meanX) * (v - meanY), 0);
+  const den = values.reduce((s, _, i) => s + (i - meanX) ** 2, 0);
+  return den === 0 ? 0 : num / den;
+}
+
+function stdDev(values: readonly number[]): number {
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  return Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length);
+}
+
+export async function trendAnalyzer(
+  state: BoardState,
+  config: RunnableConfig,
+): Promise<Partial<BoardState>> {
+  const runId = getRunId(state, config);
+  const startedAt = Date.now();
+
+  emit(runId, {
+    type: 'node_started',
+    runId,
+    nodeId: nodeMeta.id,
+    nodeType: nodeMeta.type,
+    label: nodeMeta.label,
+    timestamp: new Date(startedAt).toISOString(),
+  } as SSEEvent);
+
+  // ── Step 1: deterministic regression on POPULATION_BASELINE ──────────────────
+
+  const nimSlope = linearSlope(POPULATION_BASELINE.nim);
+  const nplSlope = linearSlope(POPULATION_BASELINE.nplRatio);
+  const efficiencySlope = linearSlope(POPULATION_BASELINE.efficiencyRatio);
+
+  // Flag if |slope| > stdDev / n for the series (adverse direction)
+  const n = POPULATION_BASELINE.nim.length;
+  const nimFlagged = nimSlope < 0 && Math.abs(nimSlope) > stdDev(POPULATION_BASELINE.nim) / n;
+  const nplFlagged = nplSlope > 0 && nplSlope > stdDev(POPULATION_BASELINE.nplRatio) / n;
+  const effFlagged =
+    efficiencySlope > 0 && efficiencySlope > stdDev(POPULATION_BASELINE.efficiencyRatio) / n;
+
+  const flaggedMetrics: string[] = [];
+  if (nimFlagged) flaggedMetrics.push(`NIM slope ${nimSlope.toFixed(3)}%/qtr (declining)`);
+  if (nplFlagged) flaggedMetrics.push(`NPL slope +${nplSlope.toFixed(3)}%/qtr (rising)`);
+  if (effFlagged)
+    flaggedMetrics.push(`Efficiency ratio slope +${efficiencySlope.toFixed(3)}%/qtr (rising)`);
+
+  const trendPayload = {
+    nimTrend: [...POPULATION_BASELINE.nim],
+    roaTrend: [...POPULATION_BASELINE.roa],
+    roeTrend: [...POPULATION_BASELINE.roe],
+    nplTrend: [...POPULATION_BASELINE.nplRatio],
+    efficiencyTrend: [...POPULATION_BASELINE.efficiencyRatio],
+    cet1Trend: [...POPULATION_BASELINE.cet1Ratio],
+    quarters: [...QUARTERS],
+  };
+
+  // ── Step 2: LLM narrative only when flags found ────────────────────────────
+
+  let trendAnalysis: TrendAnalysis;
+
+  if (flaggedMetrics.length > 0) {
+    try {
+      const response = await getOpenAI().chat.completions.create({
+        model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+        response_format: { type: 'json_object' },
+        temperature: 0.1,
+        messages: [
+          { role: 'system', content: TREND_NARRATIVE_PROMPT },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              ...trendPayload,
+              flaggedMetrics,
+              slopes: { nim: nimSlope, npl: nplSlope, efficiencyRatio: efficiencySlope },
+            }),
+          },
+        ],
+      });
+
+      const raw = response.choices[0]?.message?.content ?? '{}';
+      const parsed = JSON.parse(raw) as TrendAnalysis;
+      trendAnalysis = { ...trendPayload, ...parsed };
+    } catch (err) {
+      emit(runId, {
+        type: 'error',
+        runId,
+        nodeId: nodeMeta.id,
+        message: `trendAnalyzer LLM error: ${String(err)}`,
+        timestamp: new Date().toISOString(),
+      } as SSEEvent);
+      // Fallback: deterministic narrative
+      const ragStatus: RAGStatus = flaggedMetrics.length >= 2 ? 'red' : 'amber';
+      trendAnalysis = {
+        ...trendPayload,
+        narrative: `Adverse trends flagged: ${flaggedMetrics.join('; ')}. Board attention warranted.`,
+        ragStatus,
+      };
+    }
+  } else {
+    trendAnalysis = {
+      ...trendPayload,
+      narrative:
+        'Key performance metrics show stable to improving trends across the review period, with no statistically significant adverse movements detected.',
+      ragStatus: 'green',
+    };
+  }
+
+  const stateDelta: Partial<BoardState> = { trendAnalysis };
+
+  emit(runId, {
+    type: 'node_completed',
+    runId,
+    nodeId: nodeMeta.id,
+    nodeType: nodeMeta.type,
+    label: nodeMeta.label,
+    outputSummary: `Trend analysis complete. RAG: ${trendAnalysis.ragStatus}. Flags: ${flaggedMetrics.length}.`,
+    stateDelta,
+    durationMs: Date.now() - startedAt,
+    timestamp: new Date().toISOString(),
+  } as SSEEvent);
+
+  return stateDelta;
+}
