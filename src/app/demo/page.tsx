@@ -9,7 +9,6 @@ import { CompareView } from '@/components/CompareView/CompareView';
 import { NarrationOverlay } from '@/components/NarrationOverlay/NarrationOverlay';
 import { KeyboardLegend } from '@/components/KeyboardLegend/KeyboardLegend';
 import { CroweLogo } from '@/components/ui/CroweLogo';
-import { Particles } from '@/components/ui/particles';
 import { useExecutionStore } from '@/store/executionStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { motion, AnimatePresence } from 'motion/react';
@@ -30,38 +29,23 @@ export default function DemoPage() {
       <NarrationOverlay />
 
       <header
-        className="relative flex h-14 shrink-0 items-center border-b px-6 overflow-hidden"
+        className="flex h-14 shrink-0 items-center border-b px-6"
         style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
       >
-        {/* Ambient particles in header */}
-        <div className="absolute inset-0 pointer-events-none">
-          <Particles
-            className="absolute inset-0"
-            quantity={30}
-            ease={60}
-            color="#F5A800"
-            size={0.4}
-            staticity={60}
-          />
-        </div>
-
         {/* Back link */}
         <Link
           href="/"
-          className="mr-4 flex items-center gap-1.5 text-xs font-medium transition-colors hover:text-white relative z-10"
+          className="mr-5 flex items-center gap-1.5 text-xs transition-colors hover:text-white"
           style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
         >
           <ArrowLeft size={12} />
           Back
         </Link>
 
-        {/* Logo */}
-        <div className="relative z-10">
-          <CroweLogo size="sm" />
-        </div>
+        <CroweLogo size="sm" />
 
-        <span className="ml-3 text-sm relative z-10" style={{ color: 'var(--text-muted)' }}>
-          AI Board Intelligence Engine
+        <span className="ml-3 text-xs" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          Board Intelligence Engine
         </span>
 
         {/* Header controls — pushed to the right */}

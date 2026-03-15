@@ -1,8 +1,7 @@
 'use client';
 
-/* Aesthetic direction: Luxury / refined */
-
 import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { SCENARIOS } from '@/data/scenarios';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { useExecutionStore } from '@/store/executionStore';
@@ -10,8 +9,6 @@ import { useGraphExecution } from '@/hooks/useGraphExecution';
 import { ScenarioCard } from './ScenarioCard';
 import { RunControls } from './RunControls';
 import { AgentSelector } from './AgentSelector';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils';
 
 const DEFAULT_CUSTOM_NODES = Object.keys(NODE_REGISTRY);
 
@@ -19,75 +16,68 @@ export function ScenarioPanel() {
   const selectedScenarioId = useExecutionStore((state) => state.selectedScenarioId);
   const { switchScenario } = useGraphExecution();
   const [customNodes, setCustomNodes] = useState<string[]>(DEFAULT_CUSTOM_NODES);
-  const [activeTab, setActiveTab] = useState<'presets' | 'custom'>('presets');
+  const [customOpen, setCustomOpen] = useState(false);
 
-  // For custom builds, use the first scenario as data source if nothing selected
-  const customBaseScenarioId = selectedScenarioId ?? SCENARIOS[0]?.id ?? 'falcon-board';
+  const baseScenarioId = selectedScenarioId ?? SCENARIOS[0]?.id ?? 'falcon-board';
 
   return (
-    <div className="mt-4 flex h-full flex-col gap-4">
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'presets' | 'custom')}
-        className="flex min-h-0 flex-1 flex-col"
+    <div className="mt-4 flex h-full flex-col gap-3">
+      {/* Preset scenario cards */}
+      <div className="flex flex-col gap-2">
+        {SCENARIOS.map((scenario) => (
+          <ScenarioCard
+            key={scenario.id}
+            scenario={scenario}
+            isSelected={!customOpen && selectedScenarioId === scenario.id}
+            onSelect={() => {
+              setCustomOpen(false);
+              void switchScenario(scenario.id);
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Custom Build — collapsible */}
+      <div
+        className="rounded-2xl border"
+        style={{ borderColor: customOpen ? 'rgba(245,168,0,0.3)' : 'var(--border)' }}
       >
-        <TabsList className="mb-3 grid h-auto w-full grid-cols-2 gap-1 rounded-[1rem] border border-white/8 bg-white/[0.03] p-1">
-          <TabsTrigger
-            value="presets"
-            className={cn(
-              'rounded-lg px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-[#8FE1FF] transition-colors',
-              'data-[state=active]:bg-white/[0.08] data-[state=active]:text-white',
-            )}
-          >
-            Presets
-          </TabsTrigger>
-          <TabsTrigger
-            value="custom"
-            className={cn(
-              'rounded-lg px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.2em] text-[#8FE1FF] transition-colors',
-              'data-[state=active]:bg-white/[0.08] data-[state=active]:text-white',
-            )}
+        <button
+          type="button"
+          onClick={() => setCustomOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors"
+        >
+          <span
+            className="text-[11px] font-bold uppercase tracking-widest"
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: customOpen ? 'var(--accent)' : 'var(--text-muted)',
+            }}
           >
             Custom Build
-          </TabsTrigger>
-        </TabsList>
+          </span>
+          {customOpen
+            ? <ChevronUp size={13} style={{ color: 'var(--accent)' }} />
+            : <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />}
+        </button>
 
-        <TabsContent value="presets" className="flex-1">
-          <div className="flex flex-col gap-3">
-            {SCENARIOS.map((scenario) => (
-              <ScenarioCard
-                key={scenario.id}
-                scenario={scenario}
-                isSelected={selectedScenarioId === scenario.id}
-                onSelect={() => { void switchScenario(scenario.id); }}
-              />
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="custom" className="flex-1">
-          <div
-            className="rounded-[1.25rem] border p-4"
-            style={{ borderColor: 'var(--border)', backgroundColor: 'rgba(255,255,255,0.02)' }}
-          >
+        {customOpen && (
+          <div className="border-t px-4 pb-4 pt-3" style={{ borderColor: 'rgba(245,168,0,0.15)' }}>
             <p
-              className="mb-1 text-[11px] font-bold uppercase tracking-widest text-white"
-              style={{ fontFamily: 'var(--font-display)' }}
+              className="mb-3 text-[10px]"
+              style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
             >
-              Custom Agent Build
-            </p>
-            <p className="mb-4 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-              Using {SCENARIOS.find((s) => s.id === customBaseScenarioId)?.label ?? customBaseScenarioId} data.
+              Data source: {SCENARIOS.find((s) => s.id === baseScenarioId)?.label ?? baseScenarioId}
             </p>
             <AgentSelector selectedNodes={customNodes} onChange={setCustomNodes} />
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
 
       <div className="mt-auto">
         <RunControls
-          selectedScenarioId={activeTab === 'presets' ? selectedScenarioId : customBaseScenarioId}
-          customNodes={activeTab === 'custom' ? customNodes : undefined}
+          selectedScenarioId={customOpen ? baseScenarioId : selectedScenarioId}
+          customNodes={customOpen ? customNodes : undefined}
         />
       </div>
     </div>
