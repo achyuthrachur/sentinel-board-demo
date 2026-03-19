@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
           content: `Current scenario selected: ${currentScenarioId}\n\nUser message: ${message}`,
         },
       ],
-      max_tokens: 400,
+      max_completion_tokens: 400,
       temperature: 0.4,
     });
 
