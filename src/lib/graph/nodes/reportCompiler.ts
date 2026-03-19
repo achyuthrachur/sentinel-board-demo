@@ -1,21 +1,15 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
-import OpenAI from 'openai';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { generateBoardPackageDOCX } from '@/lib/docx/generateBoardPackage';
 import { emit } from '@/lib/eventEmitter';
 import type { BoardState } from '@/lib/graph/state';
 import { REPORT_COMPILER_PROMPT } from '@/lib/prompts/reportCompiler';
+import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 import type { ReportDraft, ReportSection } from '@/types/state';
 import type { RAGStatus } from '@/types/state';
 import type { SSEEvent } from '@/types/events';
 
 const nodeMeta = NODE_REGISTRY.report_compiler;
-let openai: OpenAI | null = null;
-
-function getOpenAI(): OpenAI {
-  if (!openai) openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return openai;
-}
 
 function getRunId(state: BoardState, config: RunnableConfig): string {
   const configurable = config.configurable as { runId?: string } | undefined;
@@ -74,7 +68,7 @@ export async function reportCompiler(
     nodeId: nodeMeta.id,
     nodeType: nodeMeta.type,
     label: nodeMeta.label,
-    inputSnapshot: { sectionCount: 7, model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini' },
+    inputSnapshot: { sectionCount: 7, model: getModel() },
     timestamp: new Date(startedAt).toISOString(),
   } as SSEEvent);
 
@@ -97,10 +91,10 @@ export async function reportCompiler(
       hitlNote: state.hitlNote,
     };
 
-    emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `Calling language model (${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}) — streaming report sections…`, timestamp: new Date().toISOString() } as SSEEvent);
+    emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `Calling language model (${getModel()}) — streaming report sections…`, timestamp: new Date().toISOString() } as SSEEvent);
 
-    const stream = await getOpenAI().chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+    const stream = await getOpenAIClient().chat.completions.create({
+      model: getModel(),
       stream: true,
       temperature: 0.4,
       messages: [

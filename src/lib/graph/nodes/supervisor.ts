@@ -1,17 +1,12 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
-import OpenAI from 'openai';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { emit } from '@/lib/eventEmitter';
 import type { BoardState } from '@/lib/graph/state';
 import type { SSEEvent } from '@/types/events';
 import { SUPERVISOR_PROMPT } from '@/lib/prompts/supervisor';
+import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 
 const nodeMeta = NODE_REGISTRY.supervisor;
-let openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!openai) openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return openai;
-}
 
 function getRunId(state: BoardState, config: RunnableConfig): string {
   const configurable = config.configurable as { runId?: string } | undefined;
@@ -57,8 +52,8 @@ export async function supervisor(
       operationalRiskDigest: state.operationalRiskDigest,
     };
 
-    const response = await getOpenAI().chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+    const response = await getOpenAIClient().chat.completions.create({
+      model: getModel(),
       response_format: { type: 'json_object' },
       temperature: 0.0,
       messages: [

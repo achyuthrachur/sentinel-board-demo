@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
+import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 
 export const runtime = 'nodejs';
 
@@ -52,13 +52,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: 'OpenAI API key not configured' }, { status: 500 });
   }
 
-  const client = new OpenAI({ apiKey });
-  const model = process.env.OPENAI_MODEL ?? 'gpt-4o';
+  const client = getOpenAIClient();
+  const model = getModel();
 
   try {
     const completion = await client.chat.completions.create({

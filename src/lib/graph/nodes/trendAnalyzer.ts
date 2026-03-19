@@ -1,5 +1,4 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
-import OpenAI from 'openai';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { emit } from '@/lib/eventEmitter';
 import type { BoardState } from '@/lib/graph/state';
@@ -8,13 +7,9 @@ import type { SSEEvent } from '@/types/events';
 import { sleep } from '@/lib/graph/utils';
 import { POPULATION_BASELINE, QUARTERS } from '@/data/populationBaseline';
 import { TREND_NARRATIVE_PROMPT } from '@/lib/prompts/trendAnalyzerNarrative';
+import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 
 const nodeMeta = NODE_REGISTRY.trend_analyzer;
-let openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!openai) openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return openai;
-}
 
 function getRunId(state: BoardState, config: RunnableConfig): string {
   const configurable = config.configurable as { runId?: string } | undefined;
@@ -102,9 +97,9 @@ export async function trendAnalyzer(
 
   if (flaggedMetrics.length > 0) {
     try {
-      emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `Calling language model (${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}) for narrative interpretation…`, timestamp: new Date().toISOString() } as SSEEvent);
-      const response = await getOpenAI().chat.completions.create({
-        model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
+      emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `Calling language model (${getModel()}) for narrative interpretation…`, timestamp: new Date().toISOString() } as SSEEvent);
+      const response = await getOpenAIClient().chat.completions.create({
+        model: getModel(),
         response_format: { type: 'json_object' },
         temperature: 0.1,
         messages: [

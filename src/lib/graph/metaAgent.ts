@@ -1,6 +1,6 @@
-import OpenAI from 'openai';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { buildMetaAgentPrompt } from '@/lib/prompts/metaAgent';
+import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 import type { ScenarioData } from '@/types/scenarios';
 
 export interface MetaAgentResult {
@@ -59,8 +59,8 @@ export async function runMetaAgent(scenario: ScenarioData): Promise<MetaAgentRes
   const validNodeIds = new Set(Object.keys(NODE_REGISTRY));
 
   try {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+    const client = getOpenAIClient();
+    const model = getModel();
 
     const systemPrompt = buildMetaAgentPrompt(NODE_REGISTRY);
     const userContent = buildScenarioProfile(scenario);
