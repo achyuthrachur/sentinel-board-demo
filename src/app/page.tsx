@@ -275,7 +275,7 @@ export default function LandingPage() {
               { value: '10', label: 'Specialized agents' },
               { value: '3', label: 'Meeting types' },
               { value: '1', label: 'Human review gate' },
-              { value: '100%', label: 'Auditable' },
+              { value: 'Full', label: 'Execution trace' },
             ].map((stat, i, arr) => (
               <div
                 key={stat.label}
