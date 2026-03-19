@@ -29,8 +29,8 @@ export const SPEED_DELAY: Record<'slow' | 'normal' | 'fast', number> = {
 
 const NODE_W = 210;
 const NODE_H = 100;
-const COL_GAP = 100;
-const ROW_GAP = 28;
+const COL_GAP = 140;
+const ROW_GAP = 48;
 
 export function computeLayout(
   nodeIds: string[],
@@ -102,8 +102,8 @@ export function computeColumnLayout(
   visualColumns: string[][],
   nodeW = 210,
   nodeH = 100,
-  colGap = 100,
-  rowGap = 28,
+  colGap = 140,
+  rowGap = 48,
 ): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   visualColumns.forEach((column, colIdx) => {

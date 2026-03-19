@@ -43,7 +43,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
             fontWeight: 700,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            color: 'rgba(255,255,255,0.3)',
+            color: '#FFFFFF',
             fontFamily: 'var(--font-mono)',
           }}
         >
@@ -76,7 +76,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
               <span
                 style={{
                   fontSize: 9,
-                  color: 'rgba(255,255,255,0.2)',
+                  color: 'rgba(255,255,255,0.7)',
                   fontFamily: 'var(--font-mono)',
                   minWidth: 18,
                 }}
@@ -87,7 +87,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
                 style={{
                   fontSize: 12,
                   color: isPending
-                    ? 'rgba(255,255,255,0.2)'
+                    ? 'rgba(255,255,255,0.5)'
                     : isActive
                     ? '#F5A800'
                     : 'rgba(255,255,255,0.6)',
@@ -170,7 +170,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
               fontWeight: 700,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.2)',
+              color: 'rgba(255,255,255,0.7)',
               fontFamily: 'var(--font-mono)',
               marginBottom: 8,
             }}
@@ -185,7 +185,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
                   <span
                     style={{
                       fontSize: 10,
-                      color: 'rgba(255,255,255,0.4)',
+                      color: '#FFFFFF',
                       flex: 1,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -195,7 +195,7 @@ export function ReportTOC({ sections, activeIndex, onSelect, onDownload, canDown
                   >
                     {entry.label}
                   </span>
-                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+                  <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
                     {entry.durationMs}ms
                   </span>
                 </div>

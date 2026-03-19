@@ -308,12 +308,12 @@ export default function ReportPage() {
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, color: '#828282', marginBottom: 3 }}>
+                <div style={{ fontSize: 12, color: '#333333', marginBottom: 3 }}>
                   {reportDraft?.metadata?.generatedAt
                     ? new Date(reportDraft.metadata.generatedAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
                     : 'January 2025'}
                 </div>
-                <div style={{ fontSize: 11, color: '#828282', fontFamily: 'var(--font-mono)' }}>
+                <div style={{ fontSize: 11, color: '#333333', fontFamily: 'var(--font-mono)' }}>
                   Prepared by Sentinel · Crowe AI
                 </div>
                 <div
@@ -324,7 +324,7 @@ export default function ReportPage() {
                     borderRadius: 3,
                     fontSize: 9,
                     fontWeight: 700,
-                    color: '#828282',
+                    color: '#333333',
                     fontFamily: 'var(--font-mono)',
                     letterSpacing: '0.06em',
                     textTransform: 'uppercase',
@@ -342,7 +342,7 @@ export default function ReportPage() {
                 style={{
                   textAlign: 'center',
                   padding: '40px 0',
-                  color: '#BDBDBD',
+                  color: '#666666',
                 }}
               >
                 <div
@@ -397,14 +397,14 @@ export default function ReportPage() {
                 fontWeight: 700,
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.3)',
+                color: '#FFFFFF',
                 fontFamily: 'var(--font-mono)',
                 marginBottom: 2,
               }}
             >
               Agent execution trace
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+            <div style={{ fontSize: 12, color: '#FFFFFF' }}>
               How this package was assembled
             </div>
           </div>
@@ -414,7 +414,7 @@ export default function ReportPage() {
                 style={{
                   padding: '24px 16px',
                   fontSize: 12,
-                  color: 'rgba(255,255,255,0.2)',
+                  color: 'rgba(255,255,255,0.7)',
                   textAlign: 'center',
                   lineHeight: 1.6,
                 }}
@@ -458,7 +458,7 @@ export default function ReportPage() {
                         <TimelineContent
                           className="text-[10px] pb-2 leading-relaxed"
                           style={{
-                            color: isHuman ? 'rgba(229,55,107,0.7)' : 'rgba(255,255,255,0.3)',
+                            color: isHuman ? 'rgba(229,55,107,0.7)' : '#FFFFFF',
                             fontFamily: 'var(--font-mono)',
                           }}
                         >
@@ -468,7 +468,7 @@ export default function ReportPage() {
                             <div
                               style={{
                                 fontSize: 11,
-                                color: isHuman ? 'rgba(229,55,107,0.8)' : 'rgba(255,255,255,0.4)',
+                                color: isHuman ? 'rgba(229,55,107,0.8)' : '#FFFFFF',
                                 lineHeight: 1.45,
                                 marginTop: 2,
                                 fontFamily: 'var(--font-body)',

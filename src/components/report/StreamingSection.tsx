@@ -88,7 +88,7 @@ function MarkdownTable({ lines }: { lines: string[] }) {
                     padding: '9px 14px',
                     textAlign: ci === 0 ? 'left' : 'right',
                     fontWeight: ci === 0 ? 600 : 400,
-                    color: '#333',
+                    color: '#1A1A1A',
                     borderBottom: '1px solid #F0F0F0',
                     fontSize: 13,
                   }}>
@@ -162,7 +162,7 @@ function MarkdownContent({ content }: { content: string }) {
           borderRadius: '0 8px 8px 0',
           fontSize: 14,
           lineHeight: 1.7,
-          color: '#333',
+          color: '#1A1A1A',
         }}>
           {quoteLines.map((ql, qi) => <span key={qi}>{renderInline(ql)}{qi < quoteLines.length - 1 && <br />}</span>)}
         </blockquote>
@@ -180,7 +180,7 @@ function MarkdownContent({ content }: { content: string }) {
       elements.push(
         <ul key={`ul-${i}`} style={{ margin: '10px 0 14px', paddingLeft: 24, lineHeight: 1.75 }}>
           {bullets.map((b, bi) => (
-            <li key={bi} style={{ marginBottom: 4, fontSize: 14, color: '#4F4F4F' }}>
+            <li key={bi} style={{ marginBottom: 4, fontSize: 14, color: '#1A1A1A' }}>
               {renderInline(b)}
             </li>
           ))}
@@ -199,7 +199,7 @@ function MarkdownContent({ content }: { content: string }) {
       elements.push(
         <ol key={`ol-${i}`} style={{ margin: '10px 0 14px', paddingLeft: 24, lineHeight: 1.75 }}>
           {items.map((item, ii) => (
-            <li key={ii} style={{ marginBottom: 4, fontSize: 14, color: '#4F4F4F' }}>
+            <li key={ii} style={{ marginBottom: 4, fontSize: 14, color: '#1A1A1A' }}>
               {renderInline(item)}
             </li>
           ))}
@@ -225,7 +225,7 @@ function MarkdownContent({ content }: { content: string }) {
     }
     if (paraLines.length > 0) {
       elements.push(
-        <p key={`p-${i}`} style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.75, color: '#4F4F4F' }}>
+        <p key={`p-${i}`} style={{ margin: '0 0 14px', fontSize: 14, lineHeight: 1.75, color: '#1A1A1A' }}>
           {renderInline(paraLines.join(' '))}
         </p>
       );
@@ -276,7 +276,7 @@ export function StreamingSection({ section, index, isActive, sectionRef }: Strea
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: '0.1em',
-              color: '#BDBDBD',
+              color: '#999999',
               fontFamily: 'var(--font-mono)',
               textTransform: 'uppercase',
               minWidth: 24,
@@ -352,7 +352,7 @@ export function StreamingSection({ section, index, isActive, sectionRef }: Strea
           </>
         ) : (
           section.isStreaming ? (
-            <p style={{ margin: '0 0 14px 0', color: '#BDBDBD' }}>
+            <p style={{ margin: '0 0 14px 0', color: '#999999' }}>
               <span
                 ref={cursorRef}
                 style={{
@@ -366,7 +366,7 @@ export function StreamingSection({ section, index, isActive, sectionRef }: Strea
               />
             </p>
           ) : (
-            <p style={{ margin: 0, color: '#BDBDBD', fontStyle: 'italic' }}>No content.</p>
+            <p style={{ margin: 0, color: '#999999', fontStyle: 'italic' }}>No content.</p>
           )
         )}
       </div>
@@ -385,7 +385,7 @@ export function StreamingSection({ section, index, isActive, sectionRef }: Strea
                   padding: '5px 10px',
                 }}
               >
-                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#828282', fontFamily: 'var(--font-mono)', marginRight: 6 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#666666', fontFamily: 'var(--font-mono)', marginRight: 6 }}>
                   {key}
                 </span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#011E41', fontFamily: 'var(--font-mono)' }}>
