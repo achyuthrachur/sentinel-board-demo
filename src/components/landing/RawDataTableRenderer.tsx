@@ -21,7 +21,7 @@ const DARK_STATUS: Record<string, React.CSSProperties> = {
   flag:    { background: 'rgba(245,168,0,0.12)', color: '#FFD066' },
   ok:      { background: 'rgba(5,171,140,0.12)', color: '#5DDBB5' },
   overdue: { background: 'rgba(229,55,107,0.15)', color: '#FF7096', fontWeight: 700 },
-  dim:     { color: 'rgba(255,255,255,0.5)' },
+  dim:     { color: 'rgba(255,255,255,0.7)' },
 };
 
 /* ── Shared padding constants ── */
@@ -39,18 +39,18 @@ export function RawDataTableRenderer({ table, compact = false, dark = false }: R
   // Color tokens
   const c = dark ? {
     title: '#FFFFFF',
-    source: 'rgba(255,255,255,0.7)',
+    source: '#FFFFFF',
     headerBg: 'rgba(255,255,255,0.06)',
-    headerText: 'rgba(255,255,255,0.75)',
+    headerText: '#FFFFFF',
     border: 'rgba(255,255,255,0.08)',
     rowEven: 'transparent',
     rowOdd: 'rgba(255,255,255,0.02)',
-    cellText: 'rgba(255,255,255,0.85)',
+    cellText: '#FFFFFF',
     cellBorder: 'rgba(255,255,255,0.04)',
     sectionBg: 'rgba(255,255,255,0.04)',
-    sectionText: 'rgba(255,255,255,0.7)',
+    sectionText: '#FFFFFF',
     separatorBorder: 'rgba(255,255,255,0.1)',
-    footnote: 'rgba(255,255,255,0.7)',
+    footnote: '#FFFFFF',
     footnoteBorder: 'rgba(255,255,255,0.06)',
   } : {
     title: '#011E41',

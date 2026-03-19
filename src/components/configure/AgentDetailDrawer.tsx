@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
@@ -24,6 +25,10 @@ const TYPE_COLOR: Record<string, string> = {
   llm: '#F5A800', orchestrator: '#B14FC5', human: '#E5376B',
 };
 
+const MIN_WIDTH = 360;
+const MAX_WIDTH = 900;
+const DEFAULT_WIDTH = 480;
+
 // ─── Drawer ──────────────────────────────────────────────────────────────────
 
 interface AgentDetailDrawerProps {
@@ -32,11 +37,36 @@ interface AgentDetailDrawerProps {
 }
 
 export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) {
+  const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const dragging = useRef(false);
+  const startX = useRef(0);
+  const startW = useRef(DEFAULT_WIDTH);
+
   const agent = agentId ? NODE_REGISTRY[agentId] : null;
   const rawInput = agentId ? getAgentRawInput(agentId) : null;
   const displayData = agentId ? getAgentDisplayData(agentId) : null;
   const color = agent ? TYPE_COLOR[agent.type] ?? agent.color : '#8FE1FF';
   const Icon = agentId ? AGENT_ICONS[agentId] ?? Network : Network;
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    startX.current = e.clientX;
+    startW.current = width;
+
+    const onMove = (ev: PointerEvent) => {
+      if (!dragging.current) return;
+      const delta = startX.current - ev.clientX;
+      setWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startW.current + delta)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }, [width]);
 
   return (
     <AnimatePresence>
@@ -52,7 +82,7 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
             right: 0,
             top: 0,
             bottom: 0,
-            width: 480,
+            width,
             background: 'linear-gradient(180deg, #001530 0%, #011E41 100%)',
             borderLeft: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '24px 0 0 24px',
@@ -63,6 +93,34 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
             boxShadow: '-12px 0 48px rgba(0,0,0,0.2)',
           }}
         >
+          {/* ── Resize handle on left edge ── */}
+          <div
+            onPointerDown={onPointerDown}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: 'col-resize',
+              zIndex: 60,
+              background: 'transparent',
+            }}
+          >
+            {/* Visual grip line */}
+            <div style={{
+              position: 'absolute',
+              left: 3,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 3,
+              height: 40,
+              borderRadius: 2,
+              background: 'rgba(255,255,255,0.15)',
+              transition: 'background 0.15s',
+            }} />
+          </div>
+
           {/* ── Header: icon + title + description ── */}
           <div style={{ padding: '24px 28px 20px', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
@@ -77,7 +135,7 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
                 </motion.div>
                 <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color, background: `${color}12`, padding: '4px 12px', borderRadius: 20, border: `1px solid ${color}20` }}>{agent.badgeLabel}</span>
               </div>
-              <button type="button" onClick={onClose} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', color: 'rgba(255,255,255,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+              <button type="button" onClick={onClose} style={{ width: 36, height: 36, borderRadius: 12, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
                     <X size={16} />
                   </button>
             </div>
@@ -96,7 +154,7 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 10, lineHeight: 1.7, margin: '10px 0 0' }}
+                style={{ fontSize: 14, color: '#FFFFFF', marginTop: 10, lineHeight: 1.7, margin: '10px 0 0' }}
               >
                 {displayData.explanation}
               </motion.p>
@@ -115,7 +173,7 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
               fontWeight: 700,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.5)',
+              color: '#FFFFFF',
             }}>
               Raw Source Data
             </div>
@@ -126,10 +184,10 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
             {rawInput && (
               <motion.div key="raw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
                 {rawInput.keyFields && rawInput.keyFields.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px', marginBottom: 20, padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px 20px', marginBottom: 20, padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
                     {rawInput.keyFields.map((kf, i) => (
                       <div key={i}>
-                        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,0.7)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 2 }}>{kf.label}</div>
+                        <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: '#FFFFFF', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 2 }}>{kf.label}</div>
                         <div style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 600 }}>{kf.value}</div>
                       </div>
                     ))}
@@ -141,7 +199,7 @@ export function AgentDetailDrawer({ agentId, onClose }: AgentDetailDrawerProps) 
               </motion.div>
             )}
             {!rawInput && (
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, fontFamily: 'var(--font-body)' }}>No raw input data available for this agent.</p>
+              <p style={{ color: '#FFFFFF', fontSize: 13, fontFamily: 'var(--font-body)' }}>No raw input data available for this agent.</p>
             )}
           </div>
         </motion.div>
