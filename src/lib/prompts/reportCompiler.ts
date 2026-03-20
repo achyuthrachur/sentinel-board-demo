@@ -39,6 +39,9 @@ export interface SectionDef {
   title: string;
   prompt: string;
   ragKey: string | null;
+  /** State field that must be non-null for this section to be included.
+   *  If null, the section is always included (e.g. executive summary). */
+  requiredStateKey: string | null;
 }
 
 export const SECTION_DEFS: SectionDef[] = [
@@ -46,6 +49,7 @@ export const SECTION_DEFS: SectionDef[] = [
     id: 'executive_summary',
     title: 'Executive Summary',
     ragKey: null,
+    requiredStateKey: null,
     prompt: `Write the Executive Summary section.
 
 REQUIRED CONTENT:
@@ -54,12 +58,13 @@ REQUIRED CONTENT:
 - Numbered list of top 3-5 findings requiring board attention, each with a brief explanation.
 - Closing paragraph: Supervisor routing decision and HITL outcome if applicable — describe what the supervisor decided and why.
 
-Use the financialMetrics, capitalMetrics, creditMetrics, trendAnalysis, regulatoryDigest, operationalRiskDigest, supervisorDecision, supervisorRationale, hitlDecision, and hitlNote from the context to synthesize the overall picture. Pull the most critical metric from each upstream agent.`,
+Use ONLY the data fields that are present (non-null) in the context to synthesize the overall picture. If a field is null, that agent was not included in this analysis — do NOT mention it or reference missing data. Pull the most critical metric from each upstream agent that IS present.`,
   },
   {
     id: 'financial_performance',
     title: 'Financial Performance',
     ragKey: 'financialMetrics.ragStatus',
+    requiredStateKey: 'financialMetrics',
     prompt: `Write the Financial Performance section.
 
 REQUIRED CONTENT:
@@ -78,6 +83,7 @@ Use financialMetrics from the context — it contains nim, roa, roe, nonInterest
     id: 'capital_and_liquidity',
     title: 'Capital and Liquidity',
     ragKey: 'capitalMetrics.ragStatus',
+    requiredStateKey: 'capitalMetrics',
     prompt: `Write the Capital and Liquidity section.
 
 REQUIRED CONTENT:
@@ -95,6 +101,7 @@ Use capitalMetrics from the context — it contains cet1, tierOne, totalCapital,
     id: 'credit_quality',
     title: 'Credit Quality',
     ragKey: 'creditMetrics.ragStatus',
+    requiredStateKey: 'creditMetrics',
     prompt: `Write the Credit Quality section.
 
 REQUIRED CONTENT:
@@ -111,6 +118,7 @@ Use creditMetrics from the context — it contains nplRatio, provisionCoverageRa
     id: 'trend_analysis',
     title: 'Trend Analysis',
     ragKey: 'trendAnalysis.ragStatus',
+    requiredStateKey: 'trendAnalysis',
     prompt: `Write the Trend Analysis section.
 
 REQUIRED CONTENT:
@@ -128,6 +136,7 @@ Use trendAnalysis from the context — it contains nimTrend, roaTrend, roeTrend,
     id: 'regulatory_status',
     title: 'Regulatory Status',
     ragKey: null,
+    requiredStateKey: 'regulatoryDigest',
     prompt: `Write the Regulatory Status section.
 
 REQUIRED CONTENT:
@@ -144,6 +153,7 @@ Use regulatoryDigest from the context — it contains openMRAs array (each with 
     id: 'operational_risk',
     title: 'Operational Risk',
     ragKey: 'operationalRiskDigest.ragStatus',
+    requiredStateKey: 'operationalRiskDigest',
     prompt: `Write the Operational Risk section.
 
 REQUIRED CONTENT:

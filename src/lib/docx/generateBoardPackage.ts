@@ -23,6 +23,7 @@ import {
   DOCUMENT_STYLES,
   DOCUMENT_STYLE_IDS,
   getRagCellFill,
+  HEADING_COLOR,
   NUMBERING_CONFIG,
   PAGE_FOOTER_TEXT,
   TABLE_HEADER_FILL,
@@ -295,25 +296,99 @@ export async function generateBoardPackageDOCX(
   const header = buildHeader(metadata);
   const footer = buildFooter();
 
+  // Cover page — institution name, meeting type, date
+  const coverSection = {
+    headers: { default: header },
+    footers: { default: footer },
+    children: [
+      new Paragraph({ spacing: { before: 3600 } }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({
+            text: metadata.institutionName,
+            bold: true,
+            font: BODY_FONT,
+            size: 44,
+            color: HEADING_COLOR,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 240 },
+        children: [
+          new TextRun({
+            text: `${metadata.meetingType} Board Package`,
+            bold: true,
+            font: BODY_FONT,
+            size: 32,
+            color: ACCENT_COLOR,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 200 },
+        children: [
+          new TextRun({
+            text: metadata.meetingDate,
+            font: BODY_FONT,
+            size: 24,
+            color: HEADING_COLOR,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 600 },
+        children: [
+          new TextRun({
+            text: 'Prepared by Crowe AI Innovation Team',
+            font: BODY_FONT,
+            size: 20,
+            color: ACCENT_COLOR,
+          }),
+        ],
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80 },
+        children: [
+          new TextRun({
+            text: 'CONFIDENTIAL',
+            bold: true,
+            font: BODY_FONT,
+            size: 18,
+            color: ALERT_COLOR,
+          }),
+        ],
+      }),
+    ],
+  };
+
   const doc = new Document({
     creator: 'Crowe AI Innovation Team',
     title: `${metadata.institutionName} Board Package`,
     description: `${metadata.meetingType} board package for ${metadata.meetingDate}`,
     styles: DOCUMENT_STYLES,
     numbering: NUMBERING_CONFIG,
-    sections: reportDraft.sections.map((section) => ({
-      headers: { default: header },
-      footers: { default: footer },
-      children: [
-        new Paragraph({
-          text: section.title,
-          style: DOCUMENT_STYLE_IDS.heading1,
-          heading: HeadingLevel.HEADING_1,
-        }),
-        ...buildRagParagraph(section.ragStatus),
-        ...markdownToDocxElements(section.content),
-      ],
-    })),
+    sections: [
+      coverSection,
+      ...reportDraft.sections.map((section) => ({
+        headers: { default: header },
+        footers: { default: footer },
+        children: [
+          new Paragraph({
+            text: section.title,
+            style: DOCUMENT_STYLE_IDS.heading1,
+            heading: HeadingLevel.HEADING_1,
+          }),
+          ...buildRagParagraph(section.ragStatus),
+          ...markdownToDocxElements(section.content),
+        ],
+      })),
+    ],
   });
 
   return Buffer.from(await Packer.toBuffer(doc)).toString('base64');

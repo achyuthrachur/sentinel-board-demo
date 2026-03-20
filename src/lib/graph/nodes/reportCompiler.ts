@@ -87,6 +87,15 @@ export async function reportCompiler(
     const finalSections: ReportSection[] = [];
 
     for (const sectionDef of SECTION_DEFS) {
+      // Skip sections whose upstream agent wasn't in the graph (data is null)
+      if (sectionDef.requiredStateKey) {
+        const val = (state as unknown as Record<string, unknown>)[sectionDef.requiredStateKey];
+        if (val == null) {
+          console.log(`[reportCompiler] Skipping section ${sectionDef.id} — no data from upstream agent (${sectionDef.requiredStateKey} is null)`);
+          continue;
+        }
+      }
+
       const ragStatus: RAGStatus | undefined =
         deriveRagFromState(state as unknown as Record<string, unknown>, sectionDef.ragKey);
 
