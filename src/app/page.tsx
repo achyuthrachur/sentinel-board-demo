@@ -82,13 +82,6 @@ function AnimatedStat({ value, label }: { value: string; label: string }) {
 function HeaderNav() {
   return (
     <>
-      <nav className="hidden items-center gap-8 md:flex">
-        {['Platform', 'Use cases', 'Documentation'].map((label) => (
-          <a key={label} href="#" style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, textDecoration: 'none' }}>
-            {label}
-          </a>
-        ))}
-      </nav>
       <Link href="/configure">
         <button
           type="button"
