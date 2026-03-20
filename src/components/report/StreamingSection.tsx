@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { ReportSection } from '@/types/state';
+import { SectionVizBlock } from '@/components/report/SectionVizBlock';
 
 const RAG_COLORS: Record<string, { bg: string; text: string; label: string; border: string }> = {
   red:   { bg: 'rgba(229,55,107,0.08)', text: '#E5376B', label: 'RED',   border: 'rgba(229,55,107,0.2)' },
@@ -329,6 +330,9 @@ export function StreamingSection({ section, index, isActive, sectionRef }: Strea
           </span>
         )}
       </div>
+
+      {/* Visualization block */}
+      <SectionVizBlock sectionId={section.id} />
 
       {/* Content */}
       <div>

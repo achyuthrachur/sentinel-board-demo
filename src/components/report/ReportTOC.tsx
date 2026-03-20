@@ -2,6 +2,8 @@
 
 import { Download } from 'lucide-react';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
+import { useWhatIfStore } from '@/store/whatIfStore';
+import { WhatIfLeverPanel } from '@/components/report/WhatIfLeverPanel';
 import type { ReportSection } from '@/types/state';
 
 const RAG_DOT: Record<string, string> = {
@@ -15,7 +17,18 @@ const TYPE_COLOR: Record<string, string> = {
   llm: '#F5A800', orchestrator: '#B14FC5', human: '#E5376B',
 };
 
-type TOCView = 'report' | 'agents';
+type TOCView = 'dashboard' | 'report' | 'agents';
+
+const DASHBOARD_SECTIONS = [
+  { id: 'rag-overview', label: 'RAG Overview' },
+  { id: 'financial-performance', label: 'Financial Performance' },
+  { id: 'capital-liquidity', label: 'Capital & Liquidity' },
+  { id: 'credit-quality', label: 'Credit Quality' },
+  { id: 'trend-analysis', label: 'Trend Analysis' },
+  { id: 'regulatory-status', label: 'Regulatory Status' },
+  { id: 'operational-risk', label: 'Operational Risk' },
+  { id: 'kpi-scorecard', label: 'KPI Scorecard' },
+];
 
 interface ReportTOCProps {
   sections: ReportSection[];
@@ -35,6 +48,9 @@ export function ReportTOC({
   sections, activeIndex, onSelect, onDownload, canDownload, executionLog,
   tocView, onTOCViewChange, selectedAgentId, onSelectAgent, agentNodeIds,
 }: ReportTOCProps) {
+  const isWhatIfActive = useWhatIfStore((s) => s.isWhatIfActive);
+  const toggleWhatIf = useWhatIfStore((s) => s.toggleWhatIf);
+
   return (
     <div
       style={{
@@ -45,13 +61,14 @@ export function ReportTOC({
         overflow: 'hidden',
       }}
     >
-      {/* Toggle: Report / Agents */}
+      {/* Toggle: Dashboard / Report / Agents */}
       <div style={{ padding: '12px 14px 8px', flexShrink: 0 }}>
         <div style={{
           display: 'flex', gap: 3, background: 'rgba(255,255,255,0.04)',
           borderRadius: 10, padding: 3, border: '1px solid rgba(255,255,255,0.06)',
         }}>
           {([
+            { id: 'dashboard' as TOCView, label: 'Dashboard' },
             { id: 'report' as TOCView, label: 'Report' },
             { id: 'agents' as TOCView, label: 'Agents' },
           ]).map((t) => (
@@ -77,15 +94,63 @@ export function ReportTOC({
 
       {/* Header */}
       <div style={{ padding: '6px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
-          {tocView === 'report'
-            ? `Package contents · ${sections.length} sections`
-            : `Agent outputs · ${agentNodeIds.length} agents`}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#FFFFFF', fontFamily: 'var(--font-mono)' }}>
+            {tocView === 'dashboard'
+              ? (isWhatIfActive ? 'What-If Analysis' : 'Executive dashboard')
+              : tocView === 'report'
+              ? `Package contents · ${sections.length} sections`
+              : `Agent outputs · ${agentNodeIds.length} agents`}
+          </div>
+          {tocView === 'dashboard' && (
+            <button
+              type="button"
+              onClick={toggleWhatIf}
+              style={{
+                padding: '3px 8px',
+                borderRadius: 4,
+                border: 'none',
+                fontSize: 9,
+                fontWeight: 700,
+                fontFamily: 'var(--font-mono)',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                background: isWhatIfActive ? '#F5A800' : 'rgba(255,255,255,0.08)',
+                color: isWhatIfActive ? '#011E41' : 'rgba(255,255,255,0.5)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isWhatIfActive ? 'Exit' : 'What-If'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Content list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+
+        {/* ── Dashboard sections or What-If lever panel ── */}
+        {tocView === 'dashboard' && isWhatIfActive && (
+          <WhatIfLeverPanel />
+        )}
+        {tocView === 'dashboard' && !isWhatIfActive && DASHBOARD_SECTIONS.map((ds, i) => (
+          <div
+            key={ds.id}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 16px', cursor: 'default',
+              borderLeft: '3px solid transparent',
+            }}
+          >
+            <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-mono)', minWidth: 18 }}>
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span style={{ fontSize: 12, flex: 1, lineHeight: 1.3, color: '#FFFFFF', fontWeight: 400 }}>
+              {ds.label}
+            </span>
+          </div>
+        ))}
 
         {/* ── Report sections ── */}
         {tocView === 'report' && sections.map((section, i) => {
@@ -168,7 +233,7 @@ export function ReportTOC({
       </div>
 
       {/* Agent run times (report view only) */}
-      {tocView === 'report' && executionLog.filter((e) => e.durationMs !== undefined).length > 0 && (
+      {(tocView === 'report' || tocView === 'dashboard') && executionLog.filter((e) => e.durationMs !== undefined).length > 0 && (
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', flexShrink: 0 }}>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>Agent run times</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

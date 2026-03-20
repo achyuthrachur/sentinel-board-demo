@@ -1,7 +1,8 @@
 'use client';
 
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
-import { getAgentDisplayData, type AgentPanel, type TableRow, type MetricGauge, type SparkLine, type DecisionRow } from '@/data/agentDisplayData';
+import { getAgentDisplayData } from '@/data/agentDisplayData';
+import { MetricTable, GaugeBar, SparklinePanel, DecisionGrid } from '@/components/report/viz';
 
 const PAD = '12px 20px';
 
@@ -9,131 +10,6 @@ const TYPE_COLOR: Record<string, string> = {
   deterministic: '#0075C9', algorithmic: '#05AB8C', hybrid: '#54C0E8',
   llm: '#F5A800', orchestrator: '#B14FC5', human: '#E5376B',
 };
-
-// ─── Sub-renderers (light mode) ──────────────────────────────────────────────
-
-function PTable({ headers, rows }: { headers: string[]; rows: TableRow[] }) {
-  const HL_BG: Record<string, string> = { red: '#FDEEF3', amber: '#FFF5D6', green: '#E1F5EE' };
-  const HL_C: Record<string, string> = { red: '#992A5C', amber: '#D7761D', green: '#0C7876' };
-
-  return (
-    <div style={{ marginBottom: 24, borderRadius: 10, overflow: 'hidden', border: '1px solid #E0E0E0' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, fontFamily: 'var(--font-body)' }}>
-        <thead>
-          <tr>
-            {headers.map((h, i) => (
-              <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: PAD, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: '#011E41', color: '#FFFFFF', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const bg = row.highlight && row.highlight !== 'none' ? HL_BG[row.highlight] ?? '#FFF' : i % 2 === 0 ? '#FFF' : '#FAFAFA';
-            const color = row.highlight && row.highlight !== 'none' ? HL_C[row.highlight] ?? '#1A1A1A' : '#1A1A1A';
-            return (
-              <tr key={i} style={{ background: bg }}>
-                <td style={{ padding: PAD, fontWeight: row.bold ? 700 : 600, color, borderBottom: '1px solid #F4F4F4' }}>{row.label}</td>
-                {row.values.map((v, j) => (
-                  <td key={j} style={{ padding: PAD, textAlign: 'right', fontWeight: row.bold ? 700 : 400, color, borderBottom: '1px solid #F4F4F4' }}>{v}</td>
-                ))}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function PGauges({ gauges }: { gauges: MetricGauge[] }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginBottom: 24 }}>
-      {gauges.map((g) => {
-        const fill = g.status === 'green' ? '#05AB8C' : g.status === 'amber' ? '#F5A800' : '#E5376B';
-        return (
-          <div key={g.label} style={{ padding: '18px 22px', background: '#FAFAFA', borderRadius: 12, border: '1px solid #E0E0E0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#011E41' }}>{g.label}</span>
-              <span style={{ fontSize: 18, color: fill, fontWeight: 700 }}>{g.actualLabel}</span>
-            </div>
-            <div style={{ height: 6, background: '#E0E0E0', borderRadius: 3, position: 'relative' }}>
-              <div style={{ height: '100%', width: `${Math.min(g.fillPct, 100)}%`, background: fill, borderRadius: 3, transition: 'width 0.8s ease' }} />
-              <div style={{ position: 'absolute', left: `${(g.minimum / (g.actual * 1.3)) * 100}%`, top: -3, bottom: -3, width: 2, background: '#E5376B', borderRadius: 1 }} />
-              {g.wellCapitalized !== undefined && (
-                <div style={{ position: 'absolute', left: `${(g.wellCapitalized / (g.actual * 1.3)) * 100}%`, top: -3, bottom: -3, width: 2, background: '#05AB8C', borderRadius: 1 }} />
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 16, fontSize: 11, color: '#666', marginTop: 8 }}>
-              <span>min {g.minimumLabel}</span>
-              {g.wellCapLabel && <span>well-cap {g.wellCapLabel}</span>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function PSparklines({ sparkLines }: { sparkLines: SparkLine[] }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24 }}>
-      {sparkLines.map((sl) => {
-        const h = 80, padX = 24, padY = 16;
-        const vals = sl.points.map((p) => p.value);
-        const min = Math.min(...vals) * 0.95, max = Math.max(...vals) * 1.05;
-        const range = max - min || 1;
-        return (
-          <div key={sl.label} style={{ padding: '18px 22px', background: '#FAFAFA', borderRadius: 12, border: '1px solid #E0E0E0' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#011E41' }}>{sl.label}</span>
-              <span style={{ fontSize: 12, color: sl.color, fontWeight: 600 }}>{sl.trendLabel}</span>
-            </div>
-            <svg width="100%" viewBox={`0 0 400 ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
-              <path d={sl.points.map((p, i) => { const x = padX + (i / (sl.points.length - 1)) * (400 - 2 * padX); const y = padY + (1 - (p.value - min) / range) * (h - 2 * padY); return `${i === 0 ? 'M' : 'L'} ${x} ${y}`; }).join(' ') + ` L ${400 - padX} ${h} L ${padX} ${h} Z`} fill={`${sl.color}12`} />
-              <path d={sl.points.map((p, i) => { const x = padX + (i / (sl.points.length - 1)) * (400 - 2 * padX); const y = padY + (1 - (p.value - min) / range) * (h - 2 * padY); return `${i === 0 ? 'M' : 'L'} ${x} ${y}`; }).join(' ')} fill="none" stroke={sl.color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-              {sl.points.map((p, i) => { const x = padX + (i / (sl.points.length - 1)) * (400 - 2 * padX); const y = padY + (1 - (p.value - min) / range) * (h - 2 * padY); return (<g key={i}><circle cx={x} cy={y} r={4} fill="#FFF" stroke={sl.color} strokeWidth={2} /><text x={x} y={y - 10} textAnchor="middle" fill="#1A1A1A" fontSize={10}>{p.value}{sl.unit}</text></g>); })}
-            </svg>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#666', marginTop: 8, padding: '0 8px' }}>
-              {sl.points.map((p) => <span key={p.quarter}>{p.quarter}</span>)}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function PDecisions({ rows, decision, rationale }: { rows: DecisionRow[]; decision?: string; rationale?: string }) {
-  const FS: Record<string, { bg: string; color: string; icon: string }> = {
-    critical: { bg: '#FDEEF3', color: '#992A5C', icon: '\u26A0\u26A0' },
-    warning: { bg: '#FFF5D6', color: '#D7761D', icon: '\u26A0' },
-    ok: { bg: '#E1F5EE', color: '#0C7876', icon: '\u2713' },
-  };
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'grid', gap: 2 }}>
-        {rows.map((r, i) => {
-          const f = r.flag ? FS[r.flag] : null;
-          return (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: PAD, background: f ? f.bg : '#FAFAFA', borderRadius: 8 }}>
-              <span style={{ fontSize: 14, color: '#1A1A1A' }}>{r.input}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: f?.color ?? '#1A1A1A' }}>{r.value}</span>
-                {f && <span style={{ fontSize: 11, background: f.bg, color: f.color, padding: '3px 8px', borderRadius: 4, fontWeight: 700 }}>{f.icon}</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      {decision && (
-        <div style={{ marginTop: 16, padding: '18px 22px', background: 'rgba(245,168,0,0.06)', border: '1px solid rgba(245,168,0,0.2)', borderRadius: 12 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#011E41', marginBottom: 6 }}>{decision}</div>
-          {rationale && <div style={{ fontSize: 14, color: '#1A1A1A', lineHeight: 1.7 }}>{rationale}</div>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
@@ -161,8 +37,8 @@ export function ProcessedAgentView({ agentId }: ProcessedAgentViewProps) {
       </div>
 
       {/* Processed output sections */}
-      {panel.tableHeaders && panel.tableRows && <PTable headers={panel.tableHeaders} rows={panel.tableRows} />}
-      {panel.tableHeaders_2 && panel.tableRows_2 && <PTable headers={panel.tableHeaders_2} rows={panel.tableRows_2} />}
+      {panel.tableHeaders && panel.tableRows && <MetricTable headers={panel.tableHeaders} rows={panel.tableRows} />}
+      {panel.tableHeaders_2 && panel.tableRows_2 && <MetricTable headers={panel.tableHeaders_2} rows={panel.tableRows_2} />}
 
       {panel.watchlistLoans && panel.watchlistLoans.length > 0 && (
         <div style={{ marginBottom: 24 }}>
@@ -180,9 +56,9 @@ export function ProcessedAgentView({ agentId }: ProcessedAgentViewProps) {
         </div>
       )}
 
-      {panel.gauges && <PGauges gauges={panel.gauges} />}
-      {panel.sparkLines && <PSparklines sparkLines={panel.sparkLines} />}
-      {panel.decisionRows && <PDecisions rows={panel.decisionRows} decision={panel.decision} rationale={panel.decisionRationale} />}
+      {panel.gauges && <GaugeBar gauges={panel.gauges} />}
+      {panel.sparkLines && <SparklinePanel sparkLines={panel.sparkLines} />}
+      {panel.decisionRows && <DecisionGrid rows={panel.decisionRows} decision={panel.decision} rationale={panel.decisionRationale} />}
 
       {panel.escalationFlag && (
         <div style={{ padding: PAD, background: '#FDEEF3', borderLeft: '3px solid #E5376B', borderRadius: 8, marginBottom: 24, fontSize: 14, color: '#992A5C' }}>

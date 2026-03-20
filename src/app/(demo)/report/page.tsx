@@ -7,7 +7,9 @@ import { AppHeader } from '@/components/layout/AppHeader';
 import { ReportTOC } from '@/components/report/ReportTOC';
 import { StreamingSection } from '@/components/report/StreamingSection';
 import { ProcessedAgentView } from '@/components/report/ProcessedAgentView';
+import { DashboardView } from '@/components/report/DashboardView';
 import { useExecutionStore } from '@/store/executionStore';
+import { useWhatIfStore } from '@/store/whatIfStore';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import {
   Timeline, TimelineItem, TimelineDot, TimelineLine,
@@ -113,8 +115,10 @@ export default function ReportPage() {
   const setAppPhase     = useExecutionStore((s) => s.setAppPhase);
   const handleSSEEvent  = useExecutionStore((s) => s.handleSSEEvent);
 
+  const isWhatIfActive = useWhatIfStore((s) => s.isWhatIfActive);
+
   const [activeSection, setActiveSection] = useState(0);
-  const [tocView, setTOCView] = useState<'report' | 'agents'>('report');
+  const [tocView, setTOCView] = useState<'dashboard' | 'report' | 'agents'>('dashboard');
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
   // Build agent node list from execution log
@@ -325,7 +329,7 @@ export default function ReportPage() {
           canDownload={!!docxBuffer}
           executionLog={executionLog}
           tocView={tocView}
-          onTOCViewChange={(v) => { setTOCView(v); if (v === 'report') setSelectedAgentId(null); }}
+          onTOCViewChange={(v) => { setTOCView(v); if (v !== 'agents') setSelectedAgentId(null); }}
           selectedAgentId={selectedAgentId}
           onSelectAgent={(id) => { setSelectedAgentId(id); setTOCView('agents'); }}
           agentNodeIds={agentNodeIds}
@@ -336,6 +340,11 @@ export default function ReportPage() {
           ref={scrollRef}
           style={{ background: '#F4F4F4', overflowY: 'auto', padding: '32px 40px 60px' }}
         >
+          {/* ── Dashboard view ── */}
+          {tocView === 'dashboard' && !selectedAgentId && (
+            <DashboardView />
+          )}
+
           {/* ── Agent processed output view ── */}
           {selectedAgentId && (
             <div style={{ maxWidth: 800, margin: '0 auto', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 8, padding: '32px 40px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
@@ -343,8 +352,29 @@ export default function ReportPage() {
             </div>
           )}
 
+          {/* ── What-If indicator when on Report tab ── */}
+          {tocView === 'report' && !selectedAgentId && isWhatIfActive && (
+            <div style={{
+              maxWidth: 700,
+              margin: '0 auto 12px',
+              padding: '8px 16px',
+              background: '#FFF8E6',
+              border: '1px solid #F5A800',
+              borderRadius: 6,
+              fontSize: 11,
+              fontFamily: 'var(--font-mono)',
+              color: '#8B6914',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F5A800', flexShrink: 0 }} />
+              What-If analysis active on Dashboard — report content is unaffected
+            </div>
+          )}
+
           {/* ── Report view ── */}
-          {!selectedAgentId && (
+          {tocView === 'report' && !selectedAgentId && (
           <div
             style={{
               maxWidth: 700,
