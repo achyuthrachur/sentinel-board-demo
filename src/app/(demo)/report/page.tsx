@@ -6,7 +6,9 @@ import { saveAs } from 'file-saver';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { ReportTOC } from '@/components/report/ReportTOC';
 import { StreamingSection } from '@/components/report/StreamingSection';
+import { ProcessedAgentView } from '@/components/report/ProcessedAgentView';
 import { useExecutionStore } from '@/store/executionStore';
+import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import {
   Timeline, TimelineItem, TimelineDot, TimelineLine,
   TimelineHeading, TimelineContent,
@@ -108,6 +110,15 @@ export default function ReportPage() {
   const setAppPhase     = useExecutionStore((s) => s.setAppPhase);
 
   const [activeSection, setActiveSection] = useState(0);
+  const [tocView, setTOCView] = useState<'report' | 'agents'>('report');
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+  // Build agent node list from execution log
+  const storeNodes = useExecutionStore((s) => s.nodes);
+  const agentNodeIds = storeNodes.length > 0
+    ? storeNodes.map((n) => n.id).filter((id) => id in NODE_REGISTRY)
+    : Object.keys(NODE_REGISTRY);
+
   // 2-second grace period after completion before falling back
   const [useFallback, setUseFallback] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -245,17 +256,31 @@ export default function ReportPage() {
         <ReportTOC
           sections={sections}
           activeIndex={activeSection}
-          onSelect={scrollToSection}
+          onSelect={(i) => { setTOCView('report'); setSelectedAgentId(null); scrollToSection(i); }}
           onDownload={handleDownload}
           canDownload={!!docxBuffer}
           executionLog={executionLog}
+          tocView={tocView}
+          onTOCViewChange={(v) => { setTOCView(v); if (v === 'report') setSelectedAgentId(null); }}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={(id) => { setSelectedAgentId(id); setTOCView('agents'); }}
+          agentNodeIds={agentNodeIds}
         />
 
-        {/* CENTER: Streaming report document */}
+        {/* CENTER: Report or Agent View */}
         <div
           ref={scrollRef}
           style={{ background: '#F4F4F4', overflowY: 'auto', padding: '32px 40px 60px' }}
         >
+          {/* ── Agent processed output view ── */}
+          {selectedAgentId && (
+            <div style={{ maxWidth: 800, margin: '0 auto', background: '#FFFFFF', border: '1px solid #E0E0E0', borderRadius: 8, padding: '32px 40px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+              <ProcessedAgentView agentId={selectedAgentId} />
+            </div>
+          )}
+
+          {/* ── Report view ── */}
+          {!selectedAgentId && (
           <div
             style={{
               maxWidth: 700,
@@ -372,6 +397,7 @@ export default function ReportPage() {
               />
             ))}
           </div>
+          )}
         </div>
 
         {/* RIGHT: Agent execution trace (dark) */}
