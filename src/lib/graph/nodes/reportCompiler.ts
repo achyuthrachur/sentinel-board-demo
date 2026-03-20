@@ -1,9 +1,13 @@
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
 import { generateBoardPackageDOCX } from '@/lib/docx/generateBoardPackage';
-import { emit } from '@/lib/eventEmitter';
+import { emit, storeReportResult } from '@/lib/eventEmitter';
 import type { BoardState } from '@/lib/graph/state';
-import { REPORT_COMPILER_PROMPT } from '@/lib/prompts/reportCompiler';
+import {
+  REPORT_PREAMBLE,
+  SECTION_DEFS,
+  deriveRagFromState,
+} from '@/lib/prompts/reportCompiler';
 import { getOpenAIClient, getModel } from '@/lib/openaiClient';
 import type { ReportDraft, ReportSection } from '@/types/state';
 import type { RAGStatus } from '@/types/state';
@@ -42,17 +46,23 @@ function sectionsToMarkdown(draft: ReportDraft): string {
   return lines.join('\n');
 }
 
-// ─── Section delimiter parser ─────────────────────────────────────────────────
-// Delimiter format: ===SECTION:id:Title:ragStatus=== (ragStatus optional)
-// End marker: ===REPORT_END===
-
-const SECTION_RE = /===SECTION:([^:=\n]+):([^:=\n]+)(?::([a-z]+))?===/g;
-const END_RE = /===REPORT_END===/;
-const RAG_VALUES = new Set(['red', 'amber', 'green']);
-const HOLD_BACK = 60; // chars to hold back to avoid splitting a delimiter
-
-function parseRAG(raw: string | undefined): RAGStatus | undefined {
-  return RAG_VALUES.has(raw ?? '') ? (raw as RAGStatus) : undefined;
+function buildContextPayload(state: BoardState): string {
+  return JSON.stringify({
+    scenarioId: state.scenarioId,
+    institutionName: state.institutionName,
+    meetingDate: state.meetingDate,
+    meetingType: state.meetingType,
+    financialMetrics: state.financialMetrics,
+    capitalMetrics: state.capitalMetrics,
+    creditMetrics: state.creditMetrics,
+    trendAnalysis: state.trendAnalysis,
+    regulatoryDigest: state.regulatoryDigest,
+    operationalRiskDigest: state.operationalRiskDigest,
+    supervisorDecision: state.supervisorDecision,
+    supervisorRationale: state.supervisorRationale,
+    hitlDecision: state.hitlDecision,
+    hitlNote: state.hitlNote,
+  });
 }
 
 export async function reportCompiler(
@@ -68,128 +78,100 @@ export async function reportCompiler(
     nodeId: nodeMeta.id,
     nodeType: nodeMeta.type,
     label: nodeMeta.label,
-    inputSnapshot: { sectionCount: 7, model: getModel() },
+    inputSnapshot: { sectionCount: SECTION_DEFS.length, model: getModel() },
     timestamp: new Date(startedAt).toISOString(),
   } as SSEEvent);
 
   try {
-    emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: 'Aggregating all agent outputs into report context…', timestamp: new Date().toISOString() } as SSEEvent);
-    const context = {
-      scenarioId: state.scenarioId,
-      institutionName: state.institutionName,
-      meetingDate: state.meetingDate,
-      meetingType: state.meetingType,
-      financialMetrics: state.financialMetrics,
-      capitalMetrics: state.capitalMetrics,
-      creditMetrics: state.creditMetrics,
-      trendAnalysis: state.trendAnalysis,
-      regulatoryDigest: state.regulatoryDigest,
-      operationalRiskDigest: state.operationalRiskDigest,
-      supervisorDecision: state.supervisorDecision,
-      supervisorRationale: state.supervisorRationale,
-      hitlDecision: state.hitlDecision,
-      hitlNote: state.hitlNote,
-    };
+    const contextPayload = buildContextPayload(state);
+    const finalSections: ReportSection[] = [];
 
-    emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `Calling language model (${getModel()}) — streaming report sections…`, timestamp: new Date().toISOString() } as SSEEvent);
+    for (const sectionDef of SECTION_DEFS) {
+      const ragStatus: RAGStatus | undefined =
+        deriveRagFromState(state as unknown as Record<string, unknown>, sectionDef.ragKey);
 
-    const stream = await getOpenAIClient().chat.completions.create({
-      model: getModel(),
-      stream: true,
-      temperature: 0.4,
-      messages: [
-        { role: 'system', content: REPORT_COMPILER_PROMPT },
-        { role: 'user', content: JSON.stringify(context) },
-      ],
-    });
+      emit(runId, {
+        type: 'node_progress',
+        runId,
+        nodeId: nodeMeta.id,
+        nodeType: nodeMeta.type,
+        step: `Writing section: ${sectionDef.title}…`,
+        timestamp: new Date().toISOString(),
+      } as SSEEvent);
 
-    // ── Streaming parse state ────────────────────────────────────────────────
-    let rawBuffer = '';
-    let processedUpTo = 0;
-    let currentSectionId: string | null = null;
+      emit(runId, {
+        type: 'report_section_started',
+        runId,
+        sectionId: sectionDef.id,
+        sectionTitle: sectionDef.title,
+        ragStatus,
+        timestamp: new Date().toISOString(),
+      } as SSEEvent);
 
-    // Track metadata + content per section for final reportDraft assembly
-    const sectionMeta = new Map<string, { title: string; ragStatus?: RAGStatus }>();
-    const sectionContent = new Map<string, string>();
+      let sectionContent = '';
 
-    function appendContent(sectionId: string, text: string): void {
-      sectionContent.set(sectionId, (sectionContent.get(sectionId) ?? '') + text);
-    }
+      try {
+        console.log(`[reportCompiler] Starting LLM call for section: ${sectionDef.id} (model: ${getModel()})`);
+        const sectionStartTime = Date.now();
+        const stream = await getOpenAIClient().chat.completions.create({
+          model: getModel(),
+          stream: true,
+          temperature: 0.4,
+          messages: [
+            {
+              role: 'system',
+              content: `${REPORT_PREAMBLE}\n\n## YOUR TASK\n\nWrite the "${sectionDef.title}" section.\n\n${sectionDef.prompt}`,
+            },
+            { role: 'user', content: contextPayload },
+          ],
+        });
+        console.log(`[reportCompiler] Stream opened for ${sectionDef.id} — awaiting tokens…`);
 
-    function flushBuffer(force = false): void {
-      const processableEnd = force ? rawBuffer.length : rawBuffer.length - HOLD_BACK;
-      if (processableEnd <= processedUpTo) return;
-
-      const chunk = rawBuffer.slice(processedUpTo, processableEnd);
-      SECTION_RE.lastIndex = 0;
-
-      let cursor = 0;
-      let match: RegExpExecArray | null;
-
-      while ((match = SECTION_RE.exec(chunk)) !== null) {
-        // Content before this match belongs to current section
-        const before = chunk.slice(cursor, match.index).replace(END_RE, '');
-        if (currentSectionId && before) {
-          emit(runId, { type: 'report_token', runId, sectionId: currentSectionId, token: before, timestamp: new Date().toISOString() } as SSEEvent);
-          appendContent(currentSectionId, before);
+        for await (const chunk of stream) {
+          const delta = chunk.choices[0]?.delta?.content ?? '';
+          if (delta) {
+            sectionContent += delta;
+            emit(runId, {
+              type: 'report_token',
+              runId,
+              sectionId: sectionDef.id,
+              token: delta,
+              timestamp: new Date().toISOString(),
+            } as SSEEvent);
+          }
         }
-
-        // Close previous section
-        if (currentSectionId) {
-          emit(runId, { type: 'report_section_complete', runId, sectionId: currentSectionId, timestamp: new Date().toISOString() } as SSEEvent);
-          currentSectionId = null;
-        }
-
-        // Start new section
-        const sectionId = match[1].trim();
-        const title = match[2].trim();
-        const ragStatus = parseRAG(match[3]?.trim());
-        currentSectionId = sectionId;
-        sectionMeta.set(sectionId, { title, ragStatus });
-        sectionContent.set(sectionId, '');
-        emit(runId, { type: 'report_section_started', runId, sectionId, sectionTitle: title, ragStatus, timestamp: new Date().toISOString() } as SSEEvent);
-
-        cursor = match.index + match[0].length;
+        console.log(`[reportCompiler] Section ${sectionDef.id} complete — ${sectionContent.length} chars in ${Date.now() - sectionStartTime}ms`);
+      } catch (sectionErr) {
+        console.error(`[reportCompiler] LLM FAILED for ${sectionDef.id}:`, sectionErr);
+        sectionContent =
+          `> **Error generating this section.** The language model call failed: ${String(sectionErr)}\n\nPlease retry or check the LLM configuration.`;
       }
 
-      // Remaining content after last marker
-      const trailing = chunk.slice(cursor).replace(END_RE, '');
-      if (currentSectionId && trailing) {
-        emit(runId, { type: 'report_token', runId, sectionId: currentSectionId, token: trailing, timestamp: new Date().toISOString() } as SSEEvent);
-        appendContent(currentSectionId, trailing);
-      }
+      emit(runId, {
+        type: 'report_section_complete',
+        runId,
+        sectionId: sectionDef.id,
+        timestamp: new Date().toISOString(),
+      } as SSEEvent);
 
-      processedUpTo = processableEnd;
+      finalSections.push({
+        id: sectionDef.id,
+        title: sectionDef.title,
+        content: sectionContent.trim(),
+        ragStatus,
+        isStreaming: false,
+        isComplete: true,
+      });
     }
 
-    // ── Consume stream ───────────────────────────────────────────────────────
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content ?? '';
-      if (delta) {
-        rawBuffer += delta;
-        flushBuffer(false);
-      }
-    }
-
-    // Final flush — process everything remaining
-    flushBuffer(true);
-
-    // Close final open section
-    if (currentSectionId) {
-      emit(runId, { type: 'report_section_complete', runId, sectionId: currentSectionId, timestamp: new Date().toISOString() } as SSEEvent);
-    }
-
-    // Assemble final sections from tracked metadata + content
-    const finalSections: ReportSection[] = Array.from(sectionMeta.entries()).map(([id, meta]) => ({
-      id,
-      title: meta.title,
-      content: (sectionContent.get(id) ?? '').trim(),
-      ragStatus: meta.ragStatus,
-      isStreaming: false,
-      isComplete: true,
-    }));
-
-    emit(runId, { type: 'node_progress', runId, nodeId: nodeMeta.id, nodeType: nodeMeta.type, step: `${finalSections.length} section(s) streamed — generating DOCX…`, timestamp: new Date().toISOString() } as SSEEvent);
+    emit(runId, {
+      type: 'node_progress',
+      runId,
+      nodeId: nodeMeta.id,
+      nodeType: nodeMeta.type,
+      step: `${finalSections.length} section(s) streamed — generating DOCX…`,
+      timestamp: new Date().toISOString(),
+    } as SSEEvent);
 
     const reportDraft: ReportDraft = {
       sections: finalSections,
@@ -213,7 +195,21 @@ export async function reportCompiler(
       docxBuffer,
     };
 
+    // Store full results server-side for REST retrieval.
+    // The SSE node_completed event is too large with docxBuffer (100KB-500KB+)
+    // and gets silently dropped by browsers/proxies, so we send a slim event
+    // and let the client fetch the full payload via /api/report/[runId].
+    storeReportResult(runId, { reportDraft, reportMarkdown, docxBuffer });
+
     const durationMs = Date.now() - startedAt;
+
+    // Slim SSE event: omit all heavy fields to keep the frame under ~2KB.
+    // The client fetches full report data via /api/report/[runId].
+    const slimDelta: Partial<BoardState> = {
+      reportDraft: null,
+      reportMarkdown: null,
+      docxBuffer: null,
+    };
 
     emit(runId, {
       type: 'node_completed',
@@ -222,7 +218,7 @@ export async function reportCompiler(
       nodeType: nodeMeta.type,
       label: nodeMeta.label,
       outputSummary: `Report compiled. ${finalSections.length} sections. DOCX ${(docxBytes / 1024).toFixed(1)} KB.`,
-      stateDelta,
+      stateDelta: slimDelta,
       durationMs,
       timestamp: new Date().toISOString(),
     } as SSEEvent);
@@ -231,7 +227,7 @@ export async function reportCompiler(
       type: 'execution_complete',
       runId,
       durationMs,
-      reportMarkdown,
+      reportMarkdown: null,
       timestamp: new Date().toISOString(),
     } as SSEEvent);
 

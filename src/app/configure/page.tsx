@@ -33,6 +33,8 @@ interface AnalyzeResponse {
   graph_topology: unknown;
   node_count: number;
   meta_rationale: string;
+  visual_columns?: string[][];
+  edges?: import('@/types/events').EdgeDef[];
 }
 
 const MODE_TABS: { id: ConfigureMode; label: string; icon: string }[] = [
@@ -187,6 +189,7 @@ export default function ConfigurePage() {
   const startRun = useExecutionStore((s) => s.startRun);
   const resetAll = useExecutionStore((s) => s.resetAll);
   const setAppPhase = useExecutionStore((s) => s.setAppPhase);
+  const handleSSEEvent = useExecutionStore((s) => s.handleSSEEvent);
 
   const [mode, setMode] = useState<ConfigureMode>('preset');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>(SCENARIOS[0]?.id ?? 'falcon-board');
@@ -265,6 +268,23 @@ export default function ConfigurePage() {
       }
       const data = await res.json() as AnalyzeResponse;
       startRun(data.run_id);
+
+      // Hydrate graph immediately from API response so the build page
+      // doesn't depend on SSE delivering graph_constructed (which can
+      // fail on Vercel when serverless instances don't share memory).
+      const topo = data.graph_topology as { nodes?: string[]; edges?: import('@/types/events').EdgeDef[] } | undefined;
+      const graphNodes = topo?.nodes ?? data.edges?.map((e) => e.source) ?? [];
+      const graphEdges = data.edges ?? topo?.edges ?? [];
+      handleSSEEvent({
+        type: 'graph_constructed',
+        runId: data.run_id,
+        nodes: graphNodes,
+        edges: graphEdges,
+        rationale: data.meta_rationale,
+        nodeCount: data.node_count,
+        visualColumns: data.visual_columns,
+      });
+
       setAppPhase('build');
       router.push('/build');
     } catch (e) {

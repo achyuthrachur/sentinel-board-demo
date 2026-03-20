@@ -12,6 +12,7 @@ import type {
   ExecutionLogEntry,
   HITLSummary,
   NodeType,
+  ReportDraft,
   ReportSection,
 } from '@/types/state';
 import type { BoardState } from '@/lib/graph/state';
@@ -189,6 +190,7 @@ interface ExecutionState {
   executionLog: ExecutionLogEntry[];
   liveState: Partial<BoardState>;
   reportMarkdown: string | null;
+  reportDraft: ReportDraft | null;
   docxBuffer: string | null;
   hitlDraftSections: ReportSection[] | null;
   hitlSummary: HITLSummary | null;
@@ -268,6 +270,7 @@ const initialState: ExecutionState = {
   executionLog: [],
   liveState: {},
   reportMarkdown: null,
+  reportDraft: null,
   docxBuffer: null,
   hitlDraftSections: null,
   hitlSummary: null,
@@ -310,6 +313,7 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>()(
         executionLog: [],
         liveState: {},
         reportMarkdown: null,
+        reportDraft: null,
         docxBuffer: null,
         hitlDraftSections: null,
         hitlSummary: null,
@@ -464,32 +468,49 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>()(
             summary: event.outputSummary,
             durationMs: event.durationMs,
           };
-          set((prev) => ({
-            activeNodeId: null,
-            nodeExecutionStates: { ...prev.nodeExecutionStates, [event.nodeId]: 'completed' },
-            executionLog: [...prev.executionLog, logEntry],
-            liveState: { ...prev.liveState, ...event.stateDelta },
-            reportMarkdown: event.stateDelta.reportMarkdown ?? prev.reportMarkdown,
-            docxBuffer: event.stateDelta.docxBuffer ?? prev.docxBuffer,
-            nodeOutputs: {
-              ...prev.nodeOutputs,
-              [event.nodeId]: event.stateDelta,
-            },
-            nodes: prev.nodes.map((n) =>
-              n.id === event.nodeId
-                ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      executionState: 'completed',
-                      ...(event.nodeId === 'hitl_gate' && event.stateDelta.hitlDecision
-                        ? { hitlDecision: event.stateDelta.hitlDecision }
-                        : {}),
-                    },
-                  }
-                : n,
-            ),
-          }));
+          set((prev) => {
+            // When reportDraft arrives, ALWAYS stamp reportSections from it.
+            // This is the authoritative source — streaming events may have been
+            // lost (SSE reconnect), partially received (empty sections stuck in
+            // isStreaming:true), or delayed behind the queue.
+            const incomingDraft = event.stateDelta.reportDraft;
+            const finalSections = incomingDraft?.sections
+              ? incomingDraft.sections.map((s: ReportSection) => ({
+                  ...s,
+                  isStreaming: false,
+                  isComplete: true,
+                }))
+              : prev.reportSections;
+
+            return {
+              activeNodeId: null,
+              nodeExecutionStates: { ...prev.nodeExecutionStates, [event.nodeId]: 'completed' },
+              executionLog: [...prev.executionLog, logEntry],
+              liveState: { ...prev.liveState, ...event.stateDelta },
+              reportMarkdown: event.stateDelta.reportMarkdown ?? prev.reportMarkdown,
+              reportDraft: incomingDraft ?? prev.reportDraft,
+              docxBuffer: event.stateDelta.docxBuffer ?? prev.docxBuffer,
+              reportSections: finalSections,
+              nodeOutputs: {
+                ...prev.nodeOutputs,
+                [event.nodeId]: event.stateDelta,
+              },
+              nodes: prev.nodes.map((n) =>
+                n.id === event.nodeId
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        executionState: 'completed',
+                        ...(event.nodeId === 'hitl_gate' && event.stateDelta.hitlDecision
+                          ? { hitlDecision: event.stateDelta.hitlDecision }
+                          : {}),
+                      },
+                    }
+                  : n,
+              ),
+            };
+          });
           break;
         }
 
@@ -643,6 +664,8 @@ export const useExecutionStore = create<ExecutionState & ExecutionActions>()(
       executionLog: state.executionLog,
       activeNodeId: state.activeNodeId,
       reportMarkdown: state.reportMarkdown,
+      reportDraft: state.reportDraft,
+      docxBuffer: state.docxBuffer,
       hitlDraftSections: state.hitlDraftSections,
       hitlSummary: state.hitlSummary,
       hitlDecision: state.hitlDecision,

@@ -67,6 +67,7 @@ export default function ExecutePage() {
   const setScenario        = useExecutionStore((s) => s.setScenario);
   const startRun           = useExecutionStore((s) => s.startRun);
   const executionError     = useExecutionStore((s) => s.executionError);
+  const handleSSEEvent     = useExecutionStore((s) => s.handleSSEEvent);
 
   const [view, setView] = useState<'network' | 'agents'>('network');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -92,11 +93,29 @@ export default function ExecutePage() {
         body: JSON.stringify({ scenario_id: newId }),
       });
       if (res.ok) {
-        const data = await res.json() as { run_id: string };
+        const data = await res.json() as {
+          run_id: string;
+          node_count: number;
+          meta_rationale: string;
+          graph_topology?: { nodes?: string[]; edges?: import('@/types/events').EdgeDef[] };
+          visual_columns?: string[][];
+          edges?: import('@/types/events').EdgeDef[];
+        };
         startRun(data.run_id);
+        const graphNodes = data.graph_topology?.nodes ?? [];
+        const graphEdges = data.edges ?? data.graph_topology?.edges ?? [];
+        handleSSEEvent({
+          type: 'graph_constructed',
+          runId: data.run_id,
+          nodes: graphNodes,
+          edges: graphEdges,
+          rationale: data.meta_rationale,
+          nodeCount: data.node_count,
+          visualColumns: data.visual_columns,
+        });
       }
     } catch { /* swallow */ }
-  }, [selectedScenarioId, isRunning, isComplete, resetAll, setScenario, startRun]);
+  }, [selectedScenarioId, isRunning, isComplete, resetAll, setScenario, startRun, handleSSEEvent]);
 
   const agentNodeIds = nodes.length > 0
     ? nodes.map((n) => n.id).filter((id) => id in NODE_REGISTRY)

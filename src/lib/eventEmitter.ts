@@ -11,11 +11,18 @@ export interface HITLDecision {
 // In Next.js dev mode (Turbopack), each route handler may get its own module
 // instance. Using globalThis ensures all routes share the same state.
 
+export interface ReportResult {
+  reportDraft: unknown;
+  reportMarkdown: string | null;
+  docxBuffer: string | null;
+}
+
 interface EmitterStore {
   controllers: Map<string, ReadableStreamDefaultController>;
   pendingBuffers: Map<string, SSEEvent[]>;
   pendingClose: Set<string>;
   hitlResolvers: Map<string, (decision: HITLDecision) => void>;
+  reportResults: Map<string, ReportResult>;
 }
 
 const STORE_KEY = '__sentinel_emitter__';
@@ -28,9 +35,20 @@ function getStore(): EmitterStore {
       pendingBuffers: new Map<string, SSEEvent[]>(),
       pendingClose: new Set<string>(),
       hitlResolvers: new Map<string, (decision: HITLDecision) => void>(),
+      reportResults: new Map<string, ReportResult>(),
     };
   }
   return g[STORE_KEY] as EmitterStore;
+}
+
+// ─── Report Results Store ────────────────────────────────────────────────────
+
+export function storeReportResult(runId: string, result: ReportResult): void {
+  getStore().reportResults.set(runId, result);
+}
+
+export function getReportResult(runId: string): ReportResult | undefined {
+  return getStore().reportResults.get(runId);
 }
 
 // ─── SSE Controllers ──────────────────────────────────────────────────────────

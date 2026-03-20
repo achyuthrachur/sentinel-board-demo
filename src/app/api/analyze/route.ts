@@ -247,5 +247,7 @@ export async function POST(req: NextRequest) {
     graph_topology: graphTopology,
     node_count: topology.length,
     meta_rationale: rationale,
+    visual_columns: visualColumns,
+    edges,
   });
 }

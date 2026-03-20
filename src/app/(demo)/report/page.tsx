@@ -13,7 +13,7 @@ import {
   Timeline, TimelineItem, TimelineDot, TimelineLine,
   TimelineHeading, TimelineContent,
 } from '@/components/ui/timeline';
-import type { ReportSection } from '@/types/state';
+import type { ReportDraft, ReportSection } from '@/types/state';
 
 // ─── Node type colors ─────────────────────────────────────────────────────────
 
@@ -100,14 +100,18 @@ NPL ratio has increased from 0.98% in Q4 2023 to 1.84% in Q4 2024, a deteriorati
 
 export default function ReportPage() {
   const router = useRouter();
+  const runId           = useExecutionStore((s) => s.runId);
   const reportMarkdown  = useExecutionStore((s) => s.reportMarkdown);
   const reportSections  = useExecutionStore((s) => s.reportSections);
+  const reportDraftStore = useExecutionStore((s) => s.reportDraft);
+  const nodeOutputs     = useExecutionStore((s) => s.nodeOutputs.report_compiler) as Record<string, unknown> | undefined;
   const liveState       = useExecutionStore((s) => s.liveState);
   const executionLog    = useExecutionStore((s) => s.executionLog);
   const isComplete      = useExecutionStore((s) => s.isComplete);
   const resetAll        = useExecutionStore((s) => s.resetAll);
   const docxBuffer      = useExecutionStore((s) => s.docxBuffer ?? s.liveState.docxBuffer ?? null);
   const setAppPhase     = useExecutionStore((s) => s.setAppPhase);
+  const handleSSEEvent  = useExecutionStore((s) => s.handleSSEEvent);
 
   const [activeSection, setActiveSection] = useState(0);
   const [tocView, setTOCView] = useState<'report' | 'agents'>('report');
@@ -123,7 +127,12 @@ export default function ReportPage() {
   const [useFallback, setUseFallback] = useState(false);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
-  const reportDraft = liveState.reportDraft;
+  // Use the persisted reportDraft (survives rehydration), fall back to liveState
+  const reportDraft = reportDraftStore ?? liveState.reportDraft;
+
+  // Compute fallback tiers BEFORE useEffects that reference them
+  const nodeOutputDraft = (nodeOutputs?.reportDraft as ReportDraft | undefined);
+  const draftSections = reportDraft?.sections ?? nodeOutputDraft?.sections ?? [];
 
   useEffect(() => {
     setAppPhase('complete');
@@ -136,14 +145,63 @@ export default function ReportPage() {
     }
   }, [isComplete, executionLog.length, router]);
 
-  // Fall back to FALLBACK_SECTIONS if streaming produced no sections within 2s of completion
+  // Fetch report data via REST — bypasses SSE entirely.
+  // The node_completed SSE event for report_compiler is too large (docxBuffer
+  // is 100-500KB base64) and gets silently dropped by browsers/proxies.
+  // This REST call is the reliable path for the report payload.
+  // Retries every 2s until the server has the data (execution may still be running).
+  const fetchedRef = useRef(false);
   useEffect(() => {
-    if (isComplete && reportSections.length === 0) {
+    if (!runId || fetchedRef.current) return;
+    // Already have sections AND docx — nothing to fetch
+    if (reportSections.length > 0 && docxBuffer) return;
+
+    let cancelled = false;
+
+    async function poll() {
+      for (let attempt = 0; attempt < 30 && !cancelled; attempt++) {
+        try {
+          const res = await fetch(`/api/report/${runId}`);
+          if (res.ok) {
+            const data = await res.json() as {
+              reportDraft: ReportDraft;
+              reportMarkdown: string | null;
+              docxBuffer: string | null;
+            };
+            if (data?.reportDraft) {
+              fetchedRef.current = true;
+              useExecutionStore.setState((prev) => ({
+                reportDraft: data.reportDraft ?? prev.reportDraft,
+                reportMarkdown: data.reportMarkdown ?? prev.reportMarkdown,
+                docxBuffer: data.docxBuffer ?? prev.docxBuffer,
+                reportSections: data.reportDraft?.sections?.length
+                  ? data.reportDraft.sections.map((s: ReportSection) => ({
+                      ...s,
+                      isStreaming: false,
+                      isComplete: true,
+                    }))
+                  : prev.reportSections,
+              }));
+              return;
+            }
+          }
+        } catch { /* retry */ }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    void poll();
+    return () => { cancelled = true; };
+  }, [runId, reportSections.length, docxBuffer]);
+
+  // Fall back to FALLBACK_SECTIONS only if NO source has sections after 2s
+  useEffect(() => {
+    if (isComplete && reportSections.length === 0 && draftSections.length === 0) {
       const timer = setTimeout(() => setUseFallback(true), 2000);
       return () => clearTimeout(timer);
     }
-    if (reportSections.length > 0) setUseFallback(false);
-  }, [isComplete, reportSections.length]);
+    if (reportSections.length > 0 || draftSections.length > 0) setUseFallback(false);
+  }, [isComplete, reportSections.length, draftSections.length]);
 
   // Auto-scroll to new sections as they stream in
   const prevSectionCount = useRef(0);
@@ -160,9 +218,15 @@ export default function ReportPage() {
     }
   }, [reportSections.length]);
 
-  // Determine which sections to display
+  // Determine which sections to display — multiple fallback tiers:
+  // 1. reportSections (live-streamed via SSE, best case)
+  // 2. reportDraft.sections (persisted, from node_completed)
+  // 3. nodeOutputs.report_compiler.reportDraft.sections (persisted, last resort before static)
+  // 4. FALLBACK_SECTIONS (hardcoded static content)
   const sections: ReportSection[] = reportSections.length > 0
     ? reportSections
+    : draftSections.length > 0
+    ? draftSections.map((s) => ({ ...s, isStreaming: false, isComplete: true }))
     : useFallback
     ? FALLBACK_SECTIONS
     : [];

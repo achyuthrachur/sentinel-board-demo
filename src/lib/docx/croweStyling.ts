@@ -9,9 +9,12 @@ export const RAG_CELL_FILLS = {
   red: 'F9D7E1',
 } as const;
 
+export const TABLE_HEADER_FILL = '011E41';
+
 export const DOCUMENT_STYLE_IDS = {
   heading1: 'CroweHeading1',
   heading2: 'CroweHeading2',
+  heading3: 'CroweHeading3',
   body: 'CroweBody',
 } as const;
 
@@ -108,6 +111,25 @@ export const DOCUMENT_STYLES = {
       },
     },
     {
+      id: DOCUMENT_STYLE_IDS.heading3,
+      name: 'Crowe Heading 3',
+      basedOn: 'Heading3',
+      next: DOCUMENT_STYLE_IDS.body,
+      quickFormat: true,
+      run: {
+        color: HEADING_COLOR,
+        font: BODY_FONT,
+        bold: true,
+        size: 22,
+      },
+      paragraph: {
+        spacing: {
+          before: 80,
+          after: 60,
+        },
+      },
+    },
+    {
       id: DOCUMENT_STYLE_IDS.body,
       name: 'Crowe Body',
       basedOn: 'Normal',
@@ -124,4 +146,25 @@ export const DOCUMENT_STYLES = {
       },
     },
   ],
-} as const;
+};
+
+export const NUMBERING_CONFIG = {
+  config: [
+    {
+      reference: 'sentinel-ordered',
+      levels: [
+        {
+          level: 0,
+          format: 'decimal' as const,
+          text: '%1.',
+          alignment: 'start' as const,
+          style: {
+            paragraph: {
+              indent: { left: 720, hanging: 360 },
+            },
+          },
+        },
+      ],
+    },
+  ],
+};

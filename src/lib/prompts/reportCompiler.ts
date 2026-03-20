@@ -1,103 +1,176 @@
-export const REPORT_COMPILER_PROMPT = `You are SENTINEL's Report Compiler agent, acting as a senior board reporting officer assembling a comprehensive board package for a community bank. You have earned the right to write because every upstream agent has already computed, scored, and validated the data — your job is to present it with maximum clarity, detail, and analytical depth.
+import type { RAGStatus } from '@/types/state';
 
-You must write exactly 7 sections in this exact order:
-1. executive_summary — Executive Summary
-2. financial_performance — Financial Performance
-3. capital_and_liquidity — Capital and Liquidity
-4. credit_quality — Credit Quality
-5. trend_analysis — Trend Analysis
-6. regulatory_status — Regulatory Status
-7. operational_risk — Operational Risk
+// ─── Shared preamble injected into every section call ─────────────────────────
 
-## OUTPUT FORMAT
+export const REPORT_PREAMBLE = `You are SENTINEL's Report Compiler agent, acting as a senior board reporting officer for a community bank. You are writing ONE section of a comprehensive board package.
 
-- Each section starts with a delimiter on its own line: ===SECTION:[id]:[Title]:[ragStatus]===
-- ragStatus must be one of: red, amber, green — based on the analysis data.
-- End the entire output with: ===REPORT_END===
-- Do NOT output JSON.
+## FORMATTING RULES (MANDATORY)
 
-## CONTENT FORMAT — RICH MARKDOWN
-
-Each section body MUST use markdown formatting for maximum readability:
-
-**Data tables** — Use markdown tables extensively. Every section that references metrics MUST include at least one table. Format:
+**Data tables** — Use markdown tables for every set of metrics. Format:
 | Metric | Actual | Budget/Min | Variance | Status |
 |--------|--------|-----------|----------|--------|
 | NIM | 3.21% | 3.40% | -19 bps | ⚠ FLAG |
 
-**Inline emphasis** — Use **bold** for key figures, metric names, and status callouts. Use *italics* for commentary or peer comparisons.
+**Inline emphasis** — Use **bold** for key figures, metric names, and status callouts. Use *italic* for commentary.
 
 **Bullet lists** — Use bullets for flags, action items, and key observations:
-- **FLAG:** NIM variance -19 bps exceeds -5% threshold
-- **FLAG:** Efficiency ratio 61.4% breaches 60% ceiling
+- **FLAG:** NIM variance -19 bps exceeds threshold
+- **ACTION:** Management review recommended
 
-**Subsection headers** — Use ### for subsections within each section:
-### Net Interest Margin
-### Return on Assets
+**Subsection headers** — Use ### for subsections within the section.
 
-**Status callout blocks** — Use blockquotes for important status callouts:
-> **AMBER — 2 flags identified.** Board attention recommended for NIM compression and efficiency ratio.
+**Status callout blocks** — Use blockquotes for important callouts:
+> **AMBER — 2 flags identified.** Board attention recommended.
 
-**Trend indicators** — Show direction with arrows: ↑ ↓ → for up, down, flat.
-
-## SECTION REQUIREMENTS — WHAT EACH SECTION MUST CONTAIN
-
-### 1. Executive Summary
-- Opening paragraph: Overall risk posture in 2-3 sentences
-- **Key Metrics Dashboard** table: 6-8 most important metrics with actual values, prior period, and RAG status
-- Numbered list of top 3-5 findings requiring board attention
-- Closing paragraph: Supervisor routing decision and HITL outcome if applicable
-
-### 2. Financial Performance
-- **Full metrics table**: NIM, ROA, ROE, Non-Interest Income, Efficiency Ratio — each with Actual, Budget, Prior Period, Variance, and Status columns
-- Subsection for EACH metric that is flagged (variance analysis, root cause, peer comparison)
-- For unflagged metrics, a brief paragraph confirming within-threshold performance
-- Quarter-over-quarter trend commentary for each metric
-- Peer comparison where data is available
-- Overall RAG rationale paragraph
-
-### 3. Capital and Liquidity
-- **Capital ratios table**: CET1, Tier 1, Total Capital — each with Actual, Regulatory Minimum, Well-Capitalised threshold, Buffer (bps), and Status
-- **Liquidity ratios table**: LCR, NSFR — same structure
-- For each ratio, state the cushion above minimum in basis points
-- Flag any ratio within 150 bps of minimum
-- Commentary on capital adequacy trends
-- Overall RAG rationale
-
-### 4. Credit Quality
-- **Scoring summary table**: NPL Ratio, Provision Coverage, NCO Ratio, Concentration Risk — each with Actual, Peer Median, Score (-1/0/+1), and Weight
-- **Concentration breakdown table**: Segment, Portfolio %, Policy Limit, Breach status
-- **Watchlist movements table** if available: Borrower, Direction, Previous Rating, Current Rating, Balance
-- Weighted credit score calculation shown explicitly
-- Analysis of each component score
-- Overall RAG rationale with the computed weighted score
-
-### 5. Trend Analysis
-- **5-Quarter trend table** for key metrics: Q4 2023, Q1 2024, Q2 2024, Q3 2024, Q4 2024
-- For each flagged metric: slope value, statistical significance, interpretation
-- **Flagged trends summary** as bullet list with ↑/↓ arrows
-- Narrative interpretation: what the trends mean for the next 2 quarters
-- Overall RAG rationale
-
-### 6. Regulatory Status
-- **Open MRAs table**: Description, Issue Date, Due Date, Status, Days Overdue (if any)
-- **Upcoming exams table** if available: Examiner, Date, Scope
-- Escalation flag status and reason
-- Audit coverage summary if available
-- Remediation progress narrative
-- Overall RAG rationale
-
-### 7. Operational Risk
-- **Incident summary table**: Event, Date, Classification, Board-Reportable, Impact
-- For each board-reportable incident: detailed narrative (what happened, who was affected, regulatory notifications, remediation status)
-- Thematic analysis across incidents
-- Vendor risk assessment if relevant
-- Overall RAG rationale
+**Trend indicators** — Use ↑ ↓ → for up, down, flat.
 
 ## CRITICAL RULES
-- Reference ONLY the data provided in the context. Do NOT invent metrics, dates, dollar amounts, or management actions.
-- When the data includes specific numbers, ALWAYS cite them — never say "the ratio declined" without stating the actual figure.
+- Reference ONLY the data provided. Do NOT invent metrics, dates, dollar amounts, or management actions.
+- When data includes specific numbers, ALWAYS cite them — never say "the ratio declined" without the actual figure.
 - Every metric mentioned in prose MUST also appear in a table.
-- Minimum output: each section must be at least 3 substantial paragraphs with at least one table.
-- Write in executive prose: professional, analytical, specific. Avoid vague language.
-- Do not add any text before the first ===SECTION delimiter or after ===REPORT_END===.`;
+- Write in executive prose: professional, analytical, specific.
+- Output ONLY the section body in markdown. No section title header (the system adds it). No preamble or sign-off.
+- Minimum: 3 substantial paragraphs with at least one table.`;
+
+// ─── Section definitions ──────────────────────────────────────────────────────
+
+export interface SectionDef {
+  id: string;
+  title: string;
+  prompt: string;
+  ragKey: string | null;
+}
+
+export const SECTION_DEFS: SectionDef[] = [
+  {
+    id: 'executive_summary',
+    title: 'Executive Summary',
+    ragKey: null,
+    prompt: `Write the Executive Summary section.
+
+REQUIRED CONTENT:
+- Opening paragraph: Overall risk posture in 2-3 sentences — state the institution's current health clearly.
+- **Key Metrics Dashboard** table with 6-8 most important metrics: Metric, Actual Value, Prior Period, RAG Status columns.
+- Numbered list of top 3-5 findings requiring board attention, each with a brief explanation.
+- Closing paragraph: Supervisor routing decision and HITL outcome if applicable — describe what the supervisor decided and why.
+
+Use the financialMetrics, capitalMetrics, creditMetrics, trendAnalysis, regulatoryDigest, operationalRiskDigest, supervisorDecision, supervisorRationale, hitlDecision, and hitlNote from the context to synthesize the overall picture. Pull the most critical metric from each upstream agent.`,
+  },
+  {
+    id: 'financial_performance',
+    title: 'Financial Performance',
+    ragKey: 'financialMetrics.ragStatus',
+    prompt: `Write the Financial Performance section.
+
+REQUIRED CONTENT:
+- **Full Metrics Table**: NIM, ROA, ROE, Non-Interest Income, Efficiency Ratio — each row must have: Actual, Budget, Prior Period, Variance (bps or %), and Status (✓ OK or ⚠ FLAG).
+- ### subsection for EACH flagged metric containing:
+  - Root cause analysis of the variance
+  - Peer comparison where available
+  - Quarter-over-quarter trend commentary
+- For unflagged metrics, a brief paragraph confirming within-threshold performance.
+- **Flags Summary** bullet list: every flag from financialMetrics.flags with the specific number.
+- Overall RAG rationale paragraph: why this section is rated the way it is.
+
+Use financialMetrics from the context — it contains nim, roa, roe, nonInterestIncome, efficiencyRatio (each with value, priorPeriod, budget, variance), ragStatus, and flags array.`,
+  },
+  {
+    id: 'capital_and_liquidity',
+    title: 'Capital and Liquidity',
+    ragKey: 'capitalMetrics.ragStatus',
+    prompt: `Write the Capital and Liquidity section.
+
+REQUIRED CONTENT:
+- **Capital Ratios Table**: CET1, Tier 1 Capital, Total Capital — each row: Actual, Regulatory Minimum, Well-Capitalised Threshold, Buffer (bps above minimum), Status.
+- **Liquidity Ratios Table**: LCR, NSFR — same column structure.
+- For EACH ratio, state the exact cushion above minimum in basis points.
+- Flag any ratio within 150 bps of regulatory minimum with a ⚠ warning.
+- ### Capital Adequacy subsection: commentary on trends and adequacy.
+- ### Liquidity Position subsection: commentary on funding stability.
+- Overall RAG rationale paragraph.
+
+Use capitalMetrics from the context — it contains cet1, tierOne, totalCapital, lcr, nsfr (each with value, minimum, wellCapitalized), ragStatus, and flags array.`,
+  },
+  {
+    id: 'credit_quality',
+    title: 'Credit Quality',
+    ragKey: 'creditMetrics.ragStatus',
+    prompt: `Write the Credit Quality section.
+
+REQUIRED CONTENT:
+- **Credit Scoring Summary Table**: NPL Ratio, Provision Coverage, NCO Ratio, Concentration Risk — each row: Actual, Peer Median, Score (-1/0/+1), Weight.
+- **Concentration Breakdown Table**: Segment, Portfolio %, Policy Limit, Breach Status for each concentration.
+- **Watchlist Movements Table** if data available: Borrower, Direction (↑↓), Previous Rating, Current Rating, Balance.
+- ### Weighted Credit Score subsection: show the explicit calculation of the weighted score.
+- ### subsection for each component score explaining what drove the score.
+- Overall RAG rationale paragraph with the computed weighted score.
+
+Use creditMetrics from the context — it contains nplRatio, provisionCoverageRatio, ncoRatio (each with value, priorPeriod, peerMedian), concentrations array, watchlistMovements array, ragStatus, and flags.`,
+  },
+  {
+    id: 'trend_analysis',
+    title: 'Trend Analysis',
+    ragKey: 'trendAnalysis.ragStatus',
+    prompt: `Write the Trend Analysis section.
+
+REQUIRED CONTENT:
+- **5-Quarter Trend Table** for key metrics across all available quarters. Columns: Metric, then each quarter label. Rows: NIM, ROA, ROE, NPL Ratio, Efficiency Ratio, CET1.
+- ### Flagged Trends subsection: For each metric with a concerning trend:
+  - Direction (↑/↓/→), magnitude of change, statistical significance if discernible
+  - Impact assessment for the next 1-2 quarters
+- **Trend Flags** bullet list with ↑/↓ arrows for each flagged metric.
+- ### Forward-Looking Commentary: narrative interpretation of what these trends mean for the bank's trajectory over the next 2 quarters.
+- Overall RAG rationale paragraph.
+
+Use trendAnalysis from the context — it contains nimTrend, roaTrend, roeTrend, nplTrend, efficiencyTrend, cet1Trend (each an array of numbers), quarters (array of labels), narrative, and ragStatus.`,
+  },
+  {
+    id: 'regulatory_status',
+    title: 'Regulatory Status',
+    ragKey: null,
+    prompt: `Write the Regulatory Status section.
+
+REQUIRED CONTENT:
+- **Open MRAs Table**: Description, Severity, Issue Date, Due Date, Status, Days Overdue (if any).
+- **Overdue Items** highlighted separately if any exist — with urgency callout.
+- **Upcoming Exams Table** if data available: Examiner, Scheduled Date, Scope, Status.
+- ### Escalation Status subsection: whether escalation is required and why.
+- ### Remediation Progress subsection: narrative on MRA remediation progress and management actions.
+- Overall RAG rationale paragraph.
+
+Use regulatoryDigest from the context — it contains openMRAs array (each with id, description, severity, dueDate, status), overdueItems array, upcomingExams array, summary, and escalationRequired boolean. Derive the status: if escalationRequired or overdue items exist → red/amber; otherwise green.`,
+  },
+  {
+    id: 'operational_risk',
+    title: 'Operational Risk',
+    ragKey: 'operationalRiskDigest.ragStatus',
+    prompt: `Write the Operational Risk section.
+
+REQUIRED CONTENT:
+- **Incident Summary Table**: Event Summary, Severity, Status, Board-Reportable (Yes/No), Impact.
+- ### subsection for each high/critical severity incident: detailed narrative — what happened, who was affected, regulatory notifications made, remediation status.
+- **Top Risks** bullet list from the top risks identified.
+- **Control Gaps** bullet list if any control gaps were identified.
+- ### Thematic Analysis subsection: patterns across incidents, systemic issues if any.
+- Overall RAG rationale paragraph.
+
+Use operationalRiskDigest from the context — it contains incidents array (each with summary, severity, status), topRisks array, controlGaps array, narrative, and ragStatus.`,
+  },
+];
+
+// ─── Helper: derive RAG from state using dot-path ────────────────────────────
+
+export function deriveRagFromState(
+  state: Record<string, unknown>,
+  ragKey: string | null,
+): RAGStatus | undefined {
+  if (!ragKey) return undefined;
+  const parts = ragKey.split('.');
+  let val: unknown = state;
+  for (const p of parts) {
+    if (val == null || typeof val !== 'object') return undefined;
+    val = (val as Record<string, unknown>)[p];
+  }
+  if (val === 'red' || val === 'amber' || val === 'green') return val;
+  return undefined;
+}

@@ -1,24 +1,34 @@
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   Footer,
   Header,
   HeadingLevel,
   Packer,
   Paragraph,
+  ShadingType,
+  Table,
   TableCell,
+  TableRow,
   TextRun,
+  WidthType,
 } from 'docx';
 import type { RAGStatus, ReportDraft, ReportMetadata } from '@/types/state';
 import {
   ACCENT_COLOR,
   ALERT_COLOR,
+  BODY_FONT,
   buildPageHeaderText,
   DOCUMENT_STYLES,
   DOCUMENT_STYLE_IDS,
   getRagCellFill,
+  NUMBERING_CONFIG,
   PAGE_FOOTER_TEXT,
+  TABLE_HEADER_FILL,
 } from '@/lib/docx/croweStyling';
+
+// ─── Header / Footer ─────────────────────────────────────────────────────────
 
 function buildHeader(metadata: ReportMetadata): Header {
   return new Header({
@@ -54,30 +64,207 @@ function buildFooter(): Footer {
   });
 }
 
-function buildBodyParagraphs(content: string): Paragraph[] {
-  const blocks = content
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
+// ─── Inline formatting parser ─────────────────────────────────────────────────
 
-  return blocks.map(
-    (block) =>
-      new Paragraph({
-        style: DOCUMENT_STYLE_IDS.body,
-        children: [
-          new TextRun({
-            text: block.replace(/\n+/g, ' '),
-          }),
-        ],
-      }),
-  );
+function parseInlineFormatting(text: string): TextRun[] {
+  const runs: TextRun[] = [];
+  // Match **bold**, *italic*, or plain text segments
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|([^*]+))/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match[2]) {
+      runs.push(new TextRun({ text: match[2], bold: true }));
+    } else if (match[3]) {
+      runs.push(new TextRun({ text: match[3], italics: true }));
+    } else if (match[4]) {
+      runs.push(new TextRun({ text: match[4] }));
+    }
+  }
+  return runs.length > 0 ? runs : [new TextRun({ text })];
 }
 
-function buildRagParagraph(ragStatus?: RAGStatus): Paragraph[] {
-  if (!ragStatus) {
-    return [];
+// ─── Markdown table parser ───────────────────────────────────────────────────
+
+function parseTableRow(line: string): string[] {
+  return line
+    .split('|')
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+}
+
+function isSeparatorRow(line: string): boolean {
+  return /^\|[\s:_-]+(\|[\s:_-]+)*\|$/.test(line.trim());
+}
+
+function parseMarkdownTable(lines: string[]): Table | null {
+  const dataLines = lines.filter((l) => !isSeparatorRow(l));
+  if (dataLines.length < 1) return null;
+
+  const headerCells = parseTableRow(dataLines[0]);
+  const columnCount = headerCells.length;
+  const bodyRows = dataLines.slice(1).map(parseTableRow);
+
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: headerCells.map(
+      (cell) =>
+        new TableCell({
+          shading: { fill: TABLE_HEADER_FILL, type: ShadingType.CLEAR },
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: cell,
+                  bold: true,
+                  color: 'FFFFFF',
+                  font: BODY_FONT,
+                  size: 20,
+                }),
+              ],
+            }),
+          ],
+        }),
+    ),
+  });
+
+  const rows = bodyRows.map(
+    (cells) =>
+      new TableRow({
+        children: Array.from({ length: columnCount }, (_, i) =>
+          new TableCell({
+            children: [
+              new Paragraph({
+                style: DOCUMENT_STYLE_IDS.body,
+                children: parseInlineFormatting(cells[i] ?? ''),
+              }),
+            ],
+          }),
+        ),
+      }),
+  );
+
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [headerRow, ...rows],
+  });
+}
+
+// ─── Markdown → DOCX elements ────────────────────────────────────────────────
+
+function markdownToDocxElements(content: string): (Paragraph | Table)[] {
+  const lines = content.split('\n');
+  const elements: (Paragraph | Table)[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Skip empty lines
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    // ### Heading 3
+    if (line.startsWith('### ')) {
+      elements.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_3,
+          style: DOCUMENT_STYLE_IDS.heading3,
+          children: parseInlineFormatting(line.slice(4)),
+        }),
+      );
+      i++;
+      continue;
+    }
+
+    // ## Heading 2
+    if (line.startsWith('## ')) {
+      elements.push(
+        new Paragraph({
+          heading: HeadingLevel.HEADING_2,
+          style: DOCUMENT_STYLE_IDS.heading2,
+          children: parseInlineFormatting(line.slice(3)),
+        }),
+      );
+      i++;
+      continue;
+    }
+
+    // Table block: consecutive lines starting with |
+    if (line.trim().startsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      const table = parseMarkdownTable(tableLines);
+      if (table) elements.push(table);
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      elements.push(
+        new Paragraph({
+          indent: { left: 720 },
+          border: {
+            left: { style: BorderStyle.SINGLE, size: 3, color: ACCENT_COLOR },
+          },
+          children: parseInlineFormatting(line.slice(2)),
+        }),
+      );
+      i++;
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      elements.push(
+        new Paragraph({
+          bullet: { level: 0 },
+          children: parseInlineFormatting(line.replace(/^[-*] /, '')),
+        }),
+      );
+      i++;
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(line)) {
+      elements.push(
+        new Paragraph({
+          numbering: { reference: 'sentinel-ordered', level: 0 },
+          children: parseInlineFormatting(line.replace(/^\d+\. /, '')),
+        }),
+      );
+      i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^---+$/.test(line.trim())) {
+      i++;
+      continue;
+    }
+
+    // Regular paragraph
+    elements.push(
+      new Paragraph({
+        style: DOCUMENT_STYLE_IDS.body,
+        children: parseInlineFormatting(line),
+      }),
+    );
+    i++;
   }
 
+  return elements;
+}
+
+// ─── RAG status paragraph ────────────────────────────────────────────────────
+
+function buildRagParagraph(ragStatus?: RAGStatus): Paragraph[] {
+  if (!ragStatus) return [];
   return [
     new Paragraph({
       style: DOCUMENT_STYLE_IDS.heading2,
@@ -92,11 +279,11 @@ function buildRagParagraph(ragStatus?: RAGStatus): Paragraph[] {
   ];
 }
 
+// ─── Public API ──────────────────────────────────────────────────────────────
+
 export function createRagTableCell(children: Paragraph[], ragStatus: RAGStatus): TableCell {
   return new TableCell({
-    shading: {
-      fill: getRagCellFill(ragStatus),
-    },
+    shading: { fill: getRagCellFill(ragStatus) },
     children,
   });
 }
@@ -113,6 +300,7 @@ export async function generateBoardPackageDOCX(
     title: `${metadata.institutionName} Board Package`,
     description: `${metadata.meetingType} board package for ${metadata.meetingDate}`,
     styles: DOCUMENT_STYLES,
+    numbering: NUMBERING_CONFIG,
     sections: reportDraft.sections.map((section) => ({
       headers: { default: header },
       footers: { default: footer },
@@ -123,7 +311,7 @@ export async function generateBoardPackageDOCX(
           heading: HeadingLevel.HEADING_1,
         }),
         ...buildRagParagraph(section.ragStatus),
-        ...buildBodyParagraphs(section.content),
+        ...markdownToDocxElements(section.content),
       ],
     })),
   });

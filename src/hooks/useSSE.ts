@@ -18,7 +18,20 @@ export function useSSE(runId: string | null) {
   const queueRef = useRef<SSEEvent[]>([]);
   const processingRef = useRef(false);
 
+  // Report streaming events bypass the speed queue entirely — they represent
+  // real-time content that should not be artificially delayed.
+  const IMMEDIATE_TYPES = new Set([
+    'report_section_started',
+    'report_token',
+    'report_section_complete',
+  ]);
+
   function enqueue(event: SSEEvent) {
+    if (IMMEDIATE_TYPES.has(event.type)) {
+      // Process immediately, skip queue
+      handleSSEEvent(event);
+      return;
+    }
     queueRef.current.push(event);
     if (!processingRef.current) processNext();
   }
@@ -33,7 +46,7 @@ export function useSSE(runId: string | null) {
     handleSSEEvent(event);
     // Progress events: shorter delay (feels like incremental work)
     // Node transitions (started/completed): full delay (visual pause between nodes)
-    const isProgress = event.type === 'node_progress' || event.type === 'report_token';
+    const isProgress = event.type === 'node_progress';
     const delay = isProgress
       ? Math.round(SPEED_DELAY[speedRef.current] * 0.4)
       : SPEED_DELAY[speedRef.current];
