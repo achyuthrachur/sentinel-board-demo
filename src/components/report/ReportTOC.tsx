@@ -1,7 +1,9 @@
 'use client';
 
 import { Download } from 'lucide-react';
+import { useState } from 'react';
 import { NODE_REGISTRY } from '@/data/nodeRegistry';
+import { useExecutionStore } from '@/store/executionStore';
 import { useWhatIfStore } from '@/store/whatIfStore';
 import { WhatIfLeverPanel } from '@/components/report/WhatIfLeverPanel';
 import type { ReportSection } from '@/types/state';
@@ -50,6 +52,21 @@ export function ReportTOC({
 }: ReportTOCProps) {
   const isWhatIfActive = useWhatIfStore((s) => s.isWhatIfActive);
   const toggleWhatIf = useWhatIfStore((s) => s.toggleWhatIf);
+
+  // What-If requires all 4 core metric agents to have run
+  const liveState = useExecutionStore((s) => s.liveState);
+  const whatIfAvailable = !!(liveState.financialMetrics && liveState.capitalMetrics && liveState.creditMetrics && liveState.trendAnalysis);
+  const [showWhatIfHint, setShowWhatIfHint] = useState(false);
+
+  const handleWhatIfClick = () => {
+    if (whatIfAvailable || isWhatIfActive) {
+      toggleWhatIf();
+      setShowWhatIfHint(false);
+    } else {
+      setShowWhatIfHint(true);
+      setTimeout(() => setShowWhatIfHint(false), 4000);
+    }
+  };
 
   return (
     <div
@@ -103,26 +120,49 @@ export function ReportTOC({
               : `Agent outputs · ${agentNodeIds.length} agents`}
           </div>
           {tocView === 'dashboard' && (
-            <button
-              type="button"
-              onClick={toggleWhatIf}
-              style={{
-                padding: '3px 8px',
-                borderRadius: 4,
-                border: 'none',
-                fontSize: 9,
-                fontWeight: 700,
-                fontFamily: 'var(--font-mono)',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                background: isWhatIfActive ? '#F5A800' : 'rgba(255,255,255,0.08)',
-                color: isWhatIfActive ? '#011E41' : 'rgba(255,255,255,0.5)',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isWhatIfActive ? 'Exit' : 'What-If'}
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={handleWhatIfClick}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  border: 'none',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  cursor: whatIfAvailable || isWhatIfActive ? 'pointer' : 'default',
+                  background: isWhatIfActive ? '#F5A800' : 'rgba(255,255,255,0.08)',
+                  color: isWhatIfActive ? '#011E41' : whatIfAvailable ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.25)',
+                  transition: 'all 0.15s ease',
+                  opacity: whatIfAvailable || isWhatIfActive ? 1 : 0.6,
+                }}
+              >
+                {isWhatIfActive ? 'Exit' : 'What-If'}
+              </button>
+              {showWhatIfHint && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: 6,
+                  padding: '8px 12px',
+                  background: '#1A1A2E',
+                  border: '1px solid rgba(245,168,0,0.3)',
+                  borderRadius: 6,
+                  fontSize: 10,
+                  color: 'rgba(255,255,255,0.7)',
+                  fontFamily: 'var(--font-mono)',
+                  lineHeight: 1.5,
+                  whiteSpace: 'nowrap',
+                  zIndex: 10,
+                }}>
+                  Requires Financial, Capital, Credit &amp; Trend agents
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

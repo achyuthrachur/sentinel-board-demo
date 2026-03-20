@@ -30,6 +30,18 @@ const NODE_COLORS: Record<string, string> = {
 
 // ─── Static fallback sections (shown when LLM compilation unavailable) ────────
 
+// Maps fallback section IDs to the agent node that produces them.
+// null = always shown (e.g. executive summary is synthesized from all outputs).
+const FALLBACK_SECTION_AGENT: Record<string, string | null> = {
+  executive_summary:    null,
+  financial_performance: 'financial_aggregator',
+  capital_and_liquidity: 'capital_monitor',
+  credit_quality:        'credit_quality',
+  regulatory_status:     'regulatory_digest',
+  operational_risk:      'operational_risk',
+  trend_analysis:        'trend_analyzer',
+};
+
 const FALLBACK_SECTIONS: ReportSection[] = [
   {
     id: 'executive_summary',
@@ -227,12 +239,18 @@ export default function ReportPage() {
   // 2. reportDraft.sections (persisted, from node_completed)
   // 3. nodeOutputs.report_compiler.reportDraft.sections (persisted, last resort before static)
   // 4. FALLBACK_SECTIONS (hardcoded static content)
+  // Filter fallback sections to only those whose upstream agent was in the graph
+  const filteredFallback = FALLBACK_SECTIONS.filter((s) => {
+    const agent = FALLBACK_SECTION_AGENT[s.id];
+    return agent === null || agentNodeIds.includes(agent);
+  });
+
   const sections: ReportSection[] = reportSections.length > 0
     ? reportSections
     : draftSections.length > 0
     ? draftSections.map((s) => ({ ...s, isStreaming: false, isComplete: true }))
     : useFallback
-    ? FALLBACK_SECTIONS
+    ? filteredFallback
     : [];
 
   const scrollToSection = (index: number) => {
